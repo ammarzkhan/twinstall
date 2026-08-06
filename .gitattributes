@@ -1,0 +1,16 @@
+# Normalise to LF in the repository. The core-portability CI job builds this tree on
+# Ubuntu as well as Windows, and a mixed checkout makes every cross-platform diff noisy.
+* text=auto eol=lf
+
+# These are executed by cmd.exe and PowerShell on Windows and want native line endings.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+*.sln text eol=crlf
+
+# Binary assets, once they exist. Never diffed, never normalised.
+*.png binary
+*.ico binary
+*.pfx binary
+*.msix binary
+*.appx binary

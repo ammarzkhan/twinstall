@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Windows-only adapters: window enumeration (user32), process/command-line lookup
+    (WMI) and icon composition (GDI+). Everything here is a thin shell over an OS API,
+    with no decision logic of its own — the decisions live in Twinstall.Core and are
+    unit-tested there.
+
+    EnableWindowsTargeting lets this project restore and compile on a Linux or macOS
+    dev box. It still only *runs* on Windows.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- System.Drawing.Common is Windows-only by design from 7.0 onward; the analyser
+         warning that says so is telling us something we already know. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+
+    <!-- The warnings-as-errors opt-out that used to sit here is gone, and it was earned
+         rather than given up on. It existed because Roslyn had only ever seen this code
+         against stub System.Drawing and System.Management types, so the rules needing the
+         real BCL — disposal tracking above all — had never run.
+
+         They have now, on SDK 8.0.423 with the real packages restored. At the solution's
+         configured level this project builds with zero warnings, and a deliberately
+         stricter pass (AnalysisLevel=latest-all) confirmed the specific fears were
+         unfounded: CA2000 disposal and the GDI+ handle rules report nothing. That pass did
+         surface CA5392 on every P/Invoke and CA1307 in ProcessMap, both since fixed.
+
+         Note when re-checking: passing -p:AnalysisMode=All alone does nothing here, because
+         AnalysisLevel in Directory.Build.props re-derives the mode and wins. Use
+         -p:AnalysisLevel=latest-all or the result is a false clean. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Twinstall.Core\Twinstall.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="8.0.0" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

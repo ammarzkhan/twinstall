@@ -1,0 +1,21 @@
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# Build outputs
+*.msix
+*.msixbundle
+*.appx
+*.appxbundle
+*.pri
+
+# Never commit a signing certificate or key
+*.pfx
+*.snk
+*.p12
+
+# Generated icons — Twinstall derives these from the user's own installed app at run
+# time, and shipping third-party artwork in the repo is exactly what we're avoiding.
+*.ico

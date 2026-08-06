@@ -1,0 +1,54 @@
+{
+  "$schema": "./apps.schema.json",
+  "version": 2,
+  "note": "Convenience only. Detection is fully automatic (see docs/DETECTION.md) - these entries just help users find an executable. No profile paths or URL schemes are stored; both are derived at run time.",
+  "apps": [
+    {
+      "id": "slack",
+      "displayName": "Slack",
+      "exeName": "slack.exe",
+      "hints": [
+        "%LOCALAPPDATA%\\slack"
+      ],
+      "verified": false
+    },
+    {
+      "id": "discord",
+      "displayName": "Discord",
+      "exeName": "Discord.exe",
+      "hints": [
+        "%LOCALAPPDATA%\\Discord"
+      ],
+      "verified": false
+    },
+    {
+      "id": "vscode",
+      "displayName": "Visual Studio Code",
+      "exeName": "Code.exe",
+      "hints": [
+        "%LOCALAPPDATA%\\Programs\\Microsoft VS Code"
+      ],
+      "verified": false,
+      "note": "Has native profiles too; Twinstall adds taskbar badging and callback routing."
+    },
+    {
+      "id": "signal",
+      "displayName": "Signal",
+      "exeName": "Signal.exe",
+      "hints": [
+        "%LOCALAPPDATA%\\Programs\\signal-desktop"
+      ],
+      "verified": false
+    },
+    {
+      "id": "claude",
+      "displayName": "Claude",
+      "exeName": "Claude.exe",
+      "hints": [
+        "%LOCALAPPDATA%\\AnthropicClaude"
+      ],
+      "verified": true,
+      "verifiedNotes": "End-to-end on Windows 11, Store build, Aug 2026: routing, isolation, Cowork VM, badged taskbar icons."
+    }
+  ]
+}

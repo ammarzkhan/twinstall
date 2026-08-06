@@ -1,0 +1,33 @@
+<Project>
+
+  <!-- Settings shared by every project. Kept small on purpose. -->
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <!--
+      Analysers on, warnings fatal.
+
+      Roslyn has now been run over Twinstall.Core and Twinstall.Tests (SDK 8.0.129). It
+      reported 12 warnings across three rules — CA1051 public fields, CA2249 IndexOf-as-
+      Contains, CA1861 constant array argument — all of which were fixed at source rather
+      than suppressed. Both projects build clean, so the switch is on and stays on.
+
+      Twinstall.Platform opts back out — see the reason in its own .csproj. It has only
+      been analysed against stub BCL types, so the switch there is not yet earned.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+
+    <Product>Twinstall</Product>
+    <Company>Twinstall</Company>
+    <Version>0.2.0</Version>
+    <NeutralLanguage>en-GB</NeutralLanguage>
+  </PropertyGroup>
+
+</Project>
