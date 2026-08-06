@@ -83,6 +83,10 @@ is a valid outcome, not a failure.
 
 ## Step 5 — Verify before committing
 
+**Implemented.** `Twinstall.Core.LaunchProbe` holds the decisions and is unit-tested;
+`Twinstall.Platform.LaunchProbeRunner` starts the process and polls. Never yet run against a
+real application.
+
 Detection is inference. Prove it:
 
 1. Launch the app with `--user-data-dir=<new empty folder>`
@@ -93,6 +97,23 @@ Detection is inference. Prove it:
 Without this step we would confidently create broken instances for WebView2 apps, apps with a
 custom `userData` path, and anything that ignores the flag. This is the guard that turns a
 heuristic into something safe to ship.
+
+Three things the implementation adds that the four steps above don't say, each for a reason:
+
+- **The probe directory is checked against the profiles already in use** (`ValidateTarget`,
+  reusing `IsolationCheck`). This is the only detection step that launches the real application
+  and writes to disk. Aimed at a live profile, the step meant to protect user data would be the
+  thing that damaged it.
+- **Creation is checked before the clock.** An app that writes `Local State` exactly as the
+  window closes is credited, not failed.
+- **Cleanup sweeps by probe token, not just the child process handle.** An app that ignores the
+  flag typically re-parents onto the already-running instance, which our handle no longer
+  covers. Since the token is a fresh GUID, anything carrying it on its command line is
+  unambiguously ours. Left alone, a stray window looks exactly like the bug being tested for.
+
+The probe genuinely starts the user's app, so a window will appear and then vanish. That is
+inherent to the test, and the first-run UI should say so before running it rather than let it
+be a surprise.
 
 ---
 

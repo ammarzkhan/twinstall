@@ -34,19 +34,26 @@ coloured badges on the taskbar icons.
 **There is no application yet.** The only `Main()` is the test runner. The MSIX manifest declares
 `Executable="Twinstall.exe"`, which does not exist and nothing builds.
 
-What exists is a **library**, and it is good: 7 files of pure decision logic with 47 passing
-tests, plus 4 thin Win32 adapters.
+What exists is a **library**, and it is good: 8 files of pure decision logic with 76 passing
+tests, plus 5 thin Win32 adapters.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ written, analysed clean, **47/47 tests passing** |
-| `src/Twinstall.Tests` | ✅ 47 assertions, console runner, exit code is the result |
-| `src/Twinstall.Platform` | ⚠️ written, **never executed**, only analysed against stub BCL types |
+| `src/Twinstall.Core` | ✅ written, analysed clean, **76/76 tests passing** |
+| `src/Twinstall.Tests` | ✅ 76 assertions, console runner, exit code is the result |
+| `src/Twinstall.Platform` | ⚠️ written and **analyser-clean against the real BCL**, but still **never executed** |
 | Router executable | ❌ does not exist |
 | Launcher executable | ❌ does not exist |
 | Installer / first-run UI | ❌ does not exist |
-| Detection steps 3–5 | ❌ not implemented (see `docs/DETECTION.md`) |
+| Detection step 5 (launch test) | ✅ `LaunchProbe` + `LaunchProbeRunner`, decisions unit-tested |
+| Detection steps 3–4 | ❌ not implemented (see `docs/DETECTION.md`) |
 | MSIX packaging | ❌ manifest is a sketch with `REPLACE` placeholders and no assets |
+
+**"Never executed" still means what it says.** Platform now compiles and analyses clean against
+the real `System.Drawing` and `System.Management`, which it never did before — but compiling is
+not running. No adapter has been pointed at a live window, a real WMI enumeration or an actual
+application launch. `LaunchProbeRunner` in particular starts another vendor's executable and
+kills it again; that path has been reasoned about carefully and never run once.
 
 `reference/` holds the **working** Claude-specific version this is generalised from. It runs on
 the author's machine today. Port from it; don't reinvent it.
@@ -85,17 +92,28 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 47   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 76   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
 `Twinstall.Platform` needs `System.Drawing.Common` and `System.Management` from NuGet.
 
-**Warnings are errors in Core and Tests** — that was earned by reading the analyser output and
-fixing all 12 findings. **Platform opts out**, deliberately: it has only ever been analysed
-against stub BCL types, so disposal tracking (CA2000), platform compatibility (CA1416) and GDI+
-handle rules have never run. Read the first real Windows build, fix what it says, then delete
-`<TreatWarningsAsErrors>false</TreatWarningsAsErrors>` from `Twinstall.Platform.csproj`.
+**Warnings are errors in all three projects now, Platform included.** Platform's opt-out is gone
+and it was earned, not abandoned: the rules it was hedging against — CA2000 disposal, CA1416
+platform compatibility, the GDI+ handle rules — have now run against the real BCL on SDK 8.0.423
+and report nothing. A stricter pass did find CA5392 on every P/Invoke and CA1307 in `ProcessMap`;
+both are fixed.
+
+**When re-checking that, `-p:AnalysisMode=All` on its own does nothing** and reports a false
+clean, because `AnalysisLevel` in `Directory.Build.props` re-derives the mode and wins. Use:
+
+```bash
+dotnet build Twinstall.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
+```
+
+That reports 5 warnings, all deliberate and all commented at the source: `CA1002` on the
+get-only `AppConfig.Instances`, `CA1031` three times where the documented behaviour is to
+degrade rather than throw, and `CA1303` on the test runner's own console output.
 
 ---
 
@@ -152,12 +170,24 @@ maintaining a table of known apps.
 
 Order matters; each step is testable before the next.
 
-**3a. Finish detection (`docs/DETECTION.md` steps 3–5).** Currently only steps 1–2 exist.
-- Profile discovery: read the app's `Local State` / package layout to find the existing profile
-- Scheme discovery: read the registry and, for packaged apps, the package manifest
-- **The launch test** — start the target with a throwaway `--user-data-dir` and confirm it
-  actually creates a profile there. This is the safety mechanism the whole detection design
-  rests on; without it, Twinstall can commit to a profile the app ignores. Do not skip it.
+**3a. Finish detection (`docs/DETECTION.md` steps 3–5).** Steps 1–2 and 5 exist; 3–4 remain.
+- Profile discovery (step 3): read the app's `Local State` / package layout to find the existing
+  profile — **not written**
+- Scheme discovery (step 4): read the registry and, for packaged apps, the package manifest —
+  **not written**
+- ✅ **The launch test (step 5)** — `LaunchProbe` (decisions, tested) and `LaunchProbeRunner`
+  (process start, polling, cleanup). This is the safety mechanism the whole detection design
+  rests on; without it Twinstall can commit to a profile the app ignores.
+
+  Two properties in there are load-bearing, so don't simplify them away. The probe directory is
+  validated against the profiles already in use, because this is the one detection step that
+  launches the real app and writes to disk — aimed at live data, the check meant to protect a
+  profile would corrupt it. And cleanup sweeps by probe token rather than only killing the child
+  handle, because an app that *ignores* the flag re-parents onto the existing instance, which the
+  handle no longer covers; a stray window left open looks exactly like the bug being tested for.
+
+  It has never been run against a real application. That is the first thing to do on a machine
+  with Slack or Claude installed, and it needs a human watching, since a window will appear.
 
 **3b. `Twinstall.Router` — a new `net8.0-windows` WinExe.**
 Modes: `--launch <instance>`, `--watch [seconds]`, and default `<scheme>://...` routing.

@@ -43,10 +43,13 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstall.Core` (7 files) | .NET SDK 8.0.129 + mono | **yes, clean** | **47 assertions, all passing** | not yet |
-| `Twinstall.Tests` | .NET SDK 8.0.129 + mono | **yes, clean** | is the tests | not yet |
-| `Twinstall.Platform` (4 files) | against **stub** BCL types only | partially — see below | nothing to unit-test; they are OS calls | **not yet** |
+| `Twinstall.Core` (8 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **76 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 76  failed: 0`** |
+| `Twinstall.Platform` (5 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **not yet** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
+
+The first three rows changed on 7 August 2026, when the suite was first run on a real Windows
+machine rather than inferred. Nothing in `Twinstall.Platform` has still ever *executed*.
 
 ### What the analysers actually said
 
@@ -74,20 +77,37 @@ and it would have been very hard to reproduce deliberately.
 
 ### What is still unproven, and why
 
-**The Platform analyser pass used fake BCL types.** Stub `Bitmap`, `Graphics`, `Font` and
-`ManagementObjectSearcher` are enough to check control flow and P/Invoke usage, and the three
-findings above are trustworthy because they depend only on the real P/Invoke declarations and
-the real `System.Convert`. But every rule that reasons about the genuine types — disposal
-tracking (CA2000), platform compatibility (CA1416), GDI+ handle lifetime — has never run.
-`Twinstall.Platform` therefore keeps `TreatWarningsAsErrors=false`, on the same principle as
-before: a red build for findings nobody has read is worse than no gate at all. **Read the first
-Windows build, fix what it says, then delete that line from the .csproj.**
+**~~The Platform analyser pass used fake BCL types.~~ Resolved 7 August 2026.** The real
+packages have now been restored and the real rules have run. The specific fears turned out to be
+unfounded: disposal tracking (CA2000), platform compatibility (CA1416) and the GDI+ handle rules
+report nothing. `TreatWarningsAsErrors=false` is gone from the .csproj — warnings are fatal in
+all three projects.
 
-**The adapters have never executed.** `WindowEnumerator`, `ProcessMap` and `IconBadger` were
-ported from PowerShell and C# that demonstrably worked in the Claude-specific tool, but this
-exact code has not run once. The logic they *contain* is minimal by design — every decision was
-pushed into `Twinstall.Core`, where it is tested. A wrong P/Invoke signature or a GDI+ call in
-the wrong order would still get through everything above.
+The stricter pass was not free of findings, though. Two were worth fixing:
+
+| Rule | Where | Why it mattered |
+|---|---|---|
+| CA5392 ×7 | every P/Invoke in `NativeMethods` | no `DefaultDllImportSearchPaths`, so the loader searches the application directory before System32. A `user32.dll` dropped beside the exe would win. This exe is registered as a protocol handler and launched by Windows on a URL, which is not a shape where that should be left open |
+| CA1307 | `ProcessMap`, `Replace` building the WMI query | culture-sensitive string comparison — same family as the CA1305 above |
+
+Five warnings remain at `latest-all` and are all deliberate: `CA1002` on the get-only
+`AppConfig.Instances`, `CA1031` three times where the documented behaviour is to degrade rather
+than throw, `CA1303` on the test runner's own console output.
+
+**Careful when re-running that check.** `-p:AnalysisMode=All` alone does nothing, because
+`AnalysisLevel` in `Directory.Build.props` re-derives the mode and overrides it — it reports a
+clean build that is not clean. Use `-p:AnalysisLevel=latest-all`.
+
+**The adapters have never executed.** `WindowEnumerator`, `ProcessMap`, `IconBadger` and now
+`LaunchProbeRunner` were ported from, or written against, code that demonstrably worked in the
+Claude-specific tool — but this exact code has not run once. Compiling against the real BCL is a
+stronger claim than it was yesterday; it is still not the same claim. The logic they *contain* is
+minimal by design — every decision was pushed into `Twinstall.Core`, where it is tested. A wrong
+P/Invoke signature or a GDI+ call in the wrong order would still get through everything above.
+
+`LaunchProbeRunner` deserves singling out: it starts another vendor's executable and then kills
+it and deletes a directory. Every one of those steps is unexercised. Run it first on a machine
+where you can watch what happens.
 
 **Reproducing the stub analyser pass** is a temporary-project trick, not part of the build: a
 throwaway `.csproj` targeting `net8.0` with `EnableDefaultCompileItems=false`, `Compile Include`

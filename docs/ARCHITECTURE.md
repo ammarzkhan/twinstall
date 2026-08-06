@@ -151,11 +151,11 @@ because `Path.GetFullPath` silently turns a malformed config value into a real p
 unexpected, directly underneath an isolation check.
 
 **Testing without a framework.** `Twinstall.Tests` is a console app whose exit code is the
-result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 47 assertions
+result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 76 assertions
 across path handling, package-name derivation, command-line parsing, Chromium detection,
-isolation, config round-tripping and route selection. The regressions worth keeping are named
-after the bugs they'd catch: `work2 is NOT inside work`, `webview2 app rejected`, `z-order picks
-the most recently used window`.
+isolation, config round-tripping, route selection and the launch probe. The regressions worth
+keeping are named after the bugs they'd catch: `work2 is NOT inside work`, `webview2 app
+rejected`, `z-order picks the most recently used window`, `probing a live profile is refused`.
 
 ---
 
