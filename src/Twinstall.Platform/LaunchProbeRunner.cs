@@ -184,6 +184,18 @@ namespace Twinstall.Platform
             try
             {
                 if (Directory.Exists(probeDir)) Directory.Delete(probeDir, recursive: true);
+
+                // Take the shared parent with it, but only when it is both ours by name and
+                // empty — a concurrent probe may still be using it. The name check matters:
+                // without it a malformed probeDir would put %TEMP% itself in range.
+                string parent = Path.GetDirectoryName(probeDir);
+                if (!string.IsNullOrEmpty(parent)
+                    && string.Equals(Path.GetFileName(parent), "Twinstall", StringComparison.OrdinalIgnoreCase)
+                    && Directory.Exists(parent)
+                    && Directory.GetFileSystemEntries(parent).Length == 0)
+                {
+                    Directory.Delete(parent);
+                }
             }
             catch (IOException) { /* the app may still hold a handle; temp will age it out */ }
             catch (UnauthorizedAccessException) { }

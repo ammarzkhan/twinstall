@@ -5,12 +5,32 @@ points at, so an app we have never seen works as well as one we have.
 
 ---
 
+## Step 0 — Resolve a launcher stub
+
+The executable the user points at is often not the one that runs. Squirrel-packaged apps (Slack,
+Discord) put a stub at the install root beside `Update.exe`, with the real binary in
+`app-<version>\`. **The stub does not forward `--user-data-dir`**, so everything downstream
+produces an accurate but useless "this app can't do profiles".
+
+If `Update.exe` sits beside the target and `app-*` folders exist, redirect to the same executable
+name inside the highest-versioned one. Compare versions **numerically** — an ordinal sort puts
+`app-4.9.0` above `app-4.10.0`.
+
+`LauncherStub.Resolve`. Measured: `%LOCALAPPDATA%\slack\slack.exe` fails the launch test after
+the full 30s; `app-4.51.180\slack.exe` passes in 1.4s. Same application.
+
+Do not generalise this to "the root exe has no markers, so look deeper" — VS Code's root
+executable has no markers either and forwards the flag perfectly well. Only the Squirrel
+signature triggers a redirect.
+
+---
+
 ## Step 1 — Is this actually a Chromium/Electron app?
 
 `--user-data-dir` is a Chromium flag. If the target isn't Chromium-based, profiles cannot work
 and we must say so rather than produce a broken instance.
 
-Look in the executable's own folder and `resources\`:
+Look in the executable's own folder, `resources\`, **and one level of immediate subdirectories**:
 
 | Marker | Meaning |
 |---|---|
@@ -25,6 +45,22 @@ Two or more hits ⇒ confident. Zero ⇒ refuse, and explain why.
 
 This is what rules out new Teams automatically: it is WebView2, not Electron, so it fails here
 without anyone needing to know that in advance.
+
+**Why one level down, not just the exe's folder.** Measured on real installs, 7 Aug 2026:
+
+| App | Where the markers actually are | Folder-only scan |
+|---|---|---|
+| Claude (Store) | beside `claude.exe` | 6 ✅ |
+| VS Code | `<install>\e4c7e7b1d6\` — a commit-hash folder | **0 — refused a supported app** |
+| Slack | `app-4.51.180\` (after step 0) | **0** |
+
+Only one of three put them where the original scan looked.
+
+**The cost of the sweep, stated plainly.** An app bundling a fixed-version WebView2 runtime in a
+subfolder now scores like Electron, because that runtime ships the same Chromium files. This is
+tolerable *only* because step 1 is not the last word — step 5 launches the app, and a WebView2
+target ignores `--user-data-dir`. **Never let the marker check become the sole gate**, and never
+"optimise" step 5 away for apps that score highly here.
 
 ---
 

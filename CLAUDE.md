@@ -34,26 +34,26 @@ coloured badges on the taskbar icons.
 **There is no application yet.** The only `Main()` is the test runner. The MSIX manifest declares
 `Executable="Twinstall.exe"`, which does not exist and nothing builds.
 
-What exists is a **library**, and it is good: 8 files of pure decision logic with 76 passing
+What exists is a **library**, and it is good: 9 files of pure decision logic with 95 passing
 tests, plus 5 thin Win32 adapters.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ written, analysed clean, **76/76 tests passing** |
-| `src/Twinstall.Tests` | ✅ 76 assertions, console runner, exit code is the result |
-| `src/Twinstall.Platform` | ⚠️ written and **analyser-clean against the real BCL**, but still **never executed** |
+| `src/Twinstall.Core` | ✅ written, analysed clean, **95/95 tests passing** |
+| `src/Twinstall.Tests` | ✅ 95 assertions, console runner, exit code is the result |
+| `src/Twinstall.Platform` | ⚠️ analyser-clean against the real BCL; `LaunchProbeRunner` **has now run**, the rest has not |
 | Router executable | ❌ does not exist |
 | Launcher executable | ❌ does not exist |
 | Installer / first-run UI | ❌ does not exist |
-| Detection step 5 (launch test) | ✅ `LaunchProbe` + `LaunchProbeRunner`, decisions unit-tested |
+| Detection step 5 (launch test) | ✅ **verified against Claude, Slack and VS Code on a real machine** |
 | Detection steps 3–4 | ❌ not implemented (see `docs/DETECTION.md`) |
 | MSIX packaging | ❌ manifest is a sketch with `REPLACE` placeholders and no assets |
 
-**"Never executed" still means what it says.** Platform now compiles and analyses clean against
-the real `System.Drawing` and `System.Management`, which it never did before — but compiling is
-not running. No adapter has been pointed at a live window, a real WMI enumeration or an actual
-application launch. `LaunchProbeRunner` in particular starts another vendor's executable and
-kills it again; that path has been reasoned about carefully and never run once.
+**What has and hasn't run, precisely.** `LaunchProbeRunner` — process start, marker polling,
+process-tree kill, WMI straggler sweep, directory cleanup — has been executed against three real
+applications and behaves correctly. `WindowEnumerator`, `ProcessMap` and `IconBadger` still have
+not: no live window has been enumerated, no WMI process map built, no icon composed. Those three
+are the remaining "compiles but never ran" surface.
 
 `reference/` holds the **working** Claude-specific version this is generalised from. It runs on
 the author's machine today. Port from it; don't reinvent it.
@@ -92,7 +92,7 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 76   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 95   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
@@ -111,9 +111,12 @@ clean, because `AnalysisLevel` in `Directory.Build.props` re-derives the mode an
 dotnet build Twinstall.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
 ```
 
-That reports 5 warnings, all deliberate and all commented at the source: `CA1002` on the
-get-only `AppConfig.Instances`, `CA1031` three times where the documented behaviour is to
-degrade rather than throw, and `CA1303` on the test runner's own console output.
+That reports 7 warnings, all deliberate and all commented at the source: `CA1002` on the
+get-only `AppConfig.Instances`, `CA1031` five times where the documented behaviour is to degrade
+rather than throw, and `CA1303` on the test runner's own console output. Two of the `CA1031`s
+wrap a **caller-supplied delegate** (`listSubdirectories` in `ChromiumDetector` and
+`LauncherStub`), where catching anything narrower would be guessing at what someone else's
+lambda throws; an unreadable folder must count as a miss, not a crash.
 
 ---
 
@@ -164,6 +167,42 @@ first-run error. Empirical, not documented behaviour. Keep it app-specific; don'
 The Chromium marker check rejects it automatically — which is the point of detecting rather than
 maintaining a table of known apps.
 
+**Real installs mostly do NOT put the Chromium files next to the executable.** Established
+7 Aug 2026 by running the probe against three apps, and it invalidated the original marker scan:
+
+| App | Layout | Old scan |
+|---|---|---|
+| Claude (Store) | markers beside `claude.exe` | 6 markers ✅ |
+| VS Code | only `Code.exe` at the root; markers in a commit-hash folder (`e4c7e7b1d6\`) | **0 markers — refused a supported app** |
+| Slack | root `slack.exe` is a stub; markers in `app-4.51.180\` | **0 markers** |
+
+So `ChromiumDetector` now sweeps **one level of immediate subdirectories** as well as the exe's
+own folder. That has a cost worth remembering: an app bundling a fixed-version WebView2 runtime
+in a subfolder will now score like Electron, because that runtime ships the same Chromium files.
+It is acceptable only because the marker check is not the last word — step 5 launches the app and
+a WebView2 target ignores the flag. **Never let the marker check become the sole gate.**
+
+**Squirrel launcher stubs must be resolved before anything else.** `%LOCALAPPDATA%\slack\slack.exe`
+is a stub sitting next to `Update.exe`; the real binary is `app-<version>\slack.exe`. The stub
+**does not forward `--user-data-dir`**, so the probe correctly and uselessly reports "Slack cannot
+run separate instances" after the full 30s. `LauncherStub.Resolve` handles it: same launch then
+passes in 1.4s.
+
+This cannot be inferred from "the root exe has no markers" — VS Code's root executable also has
+none and forwards the flag perfectly well. The Squirrel signature (`Update.exe` beside the stub,
+`app-*` folders) has to be recognised specifically. Version folders are compared **numerically**,
+because an ordinal sort puts `app-4.9.0` above `app-4.10.0`.
+
+**Don't trust a preset hint you haven't run.** Every entry in `presets/apps.json` pointed at the
+wrong executable on a real machine: Slack and VS Code at unusable root paths, and Claude at
+`%LOCALAPPDATA%\AnthropicClaude`, which **does not exist on a Store install** — and Claude was the
+entry marked `verified: true`. Hints are now ordered most-specific-first and every one says what
+was actually measured. `verified: true` still means end-to-end, not "detection worked".
+
+**The 30s probe timeout is not generous, it is necessary.** Claude took 1.5s and Slack 1.4s, but
+VS Code took 14s on the first run against a cold profile. A 10s timeout would have produced a
+false "this app doesn't support profiles".
+
 ---
 
 ## What to build next — Stage 3
@@ -186,8 +225,10 @@ Order matters; each step is testable before the next.
   handle, because an app that *ignores* the flag re-parents onto the existing instance, which the
   handle no longer covers; a stray window left open looks exactly like the bug being tested for.
 
-  It has never been run against a real application. That is the first thing to do on a machine
-  with Slack or Claude installed, and it needs a human watching, since a window will appear.
+  ✅ **Run against real applications on 7 Aug 2026** — Claude (Store/MSIX), Slack (Squirrel) and
+  VS Code (commit-hash layout). Correct verdict in every case, cleanup clean every time, no
+  stragglers, and two already-running instances left untouched. It found three real detection
+  defects in the process; see the facts section above.
 
 **3b. `Twinstall.Router` — a new `net8.0-windows` WinExe.**
 Modes: `--launch <instance>`, `--watch [seconds]`, and default `<scheme>://...` routing.

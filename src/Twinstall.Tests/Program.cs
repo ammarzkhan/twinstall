@@ -107,6 +107,89 @@ static class Tests
         Check(!ChromiumDetector.IsChromiumApp(@"C:\t\Teams.exe", fs(webview2)), "webview2 app rejected");
         Check(!ChromiumDetector.IsChromiumApp(@"C:\n\Notepad.exe", fs(new HashSet<string>())), "plain win32 rejected");
         Eq(ChromiumDetector.Score(@"C:\app\App.exe", fs(electron)), 3, "marker score counted");
+
+        // Visual Studio Code: only Code.exe at the install root, every Chromium file in a
+        // commit-hash folder beside it. Found by running the probe — the folder-only scan
+        // called a plainly-Electron app unsupported.
+        var vscode = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            PathUtil.Join(@"C:\vsc\e4c7e7b1d6", "icudtl.dat"),
+            PathUtil.Join(@"C:\vsc\e4c7e7b1d6", "chrome_100_percent.pak"),
+            PathUtil.Join(@"C:\vsc\e4c7e7b1d6", "v8_context_snapshot.bin"),
+            PathUtil.Join(@"C:\vsc\e4c7e7b1d6", "LICENSES.chromium.html")
+        };
+        Func<string, IEnumerable<string>> vscSubs = d =>
+            PathUtil.SamePath(d, @"C:\vsc") ? new[] { @"C:\vsc\bin", @"C:\vsc\e4c7e7b1d6" } : Array.Empty<string>();
+
+        Eq(ChromiumDetector.Score(@"C:\vsc\Code.exe", fs(vscode)), 0,
+           "the exe's own folder alone scores nothing - this was the bug");
+        Eq(ChromiumDetector.Score(@"C:\vsc\Code.exe", fs(vscode), vscSubs), 4,
+           "markers are found one level down");
+        Check(ChromiumDetector.IsChromiumApp(@"C:\vsc\Code.exe", fs(vscode), vscSubs),
+              "vscode accepted once subdirectories are swept");
+        Eq(ChromiumDetector.LocateMarkers(@"C:\vsc\Code.exe", fs(vscode), vscSubs).Directory,
+           @"C:\vsc\e4c7e7b1d6", "the winning directory is reported");
+
+        // The sweep must not turn the WebView2 rejection into a false positive.
+        Func<string, IEnumerable<string>> teamsSubs = d => new[] { @"C:\t\assets" };
+        Check(!ChromiumDetector.IsChromiumApp(@"C:\t\Teams.exe", fs(webview2), teamsSubs),
+              "webview2 still rejected with the sweep on");
+        Eq(ChromiumDetector.Score(@"C:\app\App.exe", fs(electron), vscSubs), 3,
+           "the exe's own folder still wins when it is the best");
+        Eq(ChromiumDetector.LocateMarkers(@"C:\n\Notepad.exe", fs(new HashSet<string>()), vscSubs).Directory,
+           "", "no markers means no directory");
+    }
+
+    // ---------------------------------------------------------- launcher stub --
+    static void LauncherStubTests()
+    {
+        Func<HashSet<string>, Func<string, bool>> fs = set => p => set.Contains(p);
+
+        // Squirrel: stub plus Update.exe at the root, real app in app-<version>.
+        var slack = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            @"C:\s\slack.exe", @"C:\s\Update.exe",
+            @"C:\s\app-4.50.143\slack.exe", @"C:\s\app-4.51.180\slack.exe"
+        };
+        Func<string, IEnumerable<string>> subs = d => PathUtil.SamePath(d, @"C:\s")
+            ? new[] { @"C:\s\app-4.50.143", @"C:\s\app-4.51.180", @"C:\s\packages" }
+            : Array.Empty<string>();
+
+        Eq(LauncherStub.Resolve(@"C:\s\slack.exe", fs(slack), subs), @"C:\s\app-4.51.180\slack.exe",
+           "squirrel stub resolves to the newest app folder");
+        Eq(LauncherStub.Resolve(@"C:\s\app-4.51.180\slack.exe", fs(slack), subs), null,
+           "an already-resolved path is left alone");
+
+        // Without Update.exe this is not Squirrel and we must not go guessing.
+        var noUpdater = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            @"C:\s\slack.exe", @"C:\s\app-4.51.180\slack.exe"
+        };
+        Eq(LauncherStub.Resolve(@"C:\s\slack.exe", fs(noUpdater), subs), null,
+           "no Update.exe means not a squirrel stub");
+
+        // The versioned folder must actually contain the same executable name.
+        var wrongExe = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            @"C:\s\slack.exe", @"C:\s\Update.exe", @"C:\s\app-4.51.180\other.exe"
+        };
+        Eq(LauncherStub.Resolve(@"C:\s\slack.exe", fs(wrongExe), subs), null,
+           "a version folder without the executable is not a match");
+
+        Eq(LauncherStub.Resolve(@"C:\s\slack.exe", fs(slack), null), null, "no lister, no resolution");
+        Eq(LauncherStub.Resolve(null, fs(slack), subs), null, "null path is safe");
+
+        // An ordinal sort puts app-4.9.0 above app-4.10.0. Slack has shipped both shapes.
+        var v = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            @"C:\v\a.exe", @"C:\v\Update.exe", @"C:\v\app-4.9.0\a.exe", @"C:\v\app-4.10.0\a.exe"
+        };
+        Func<string, IEnumerable<string>> vsubs = d => PathUtil.SamePath(d, @"C:\v")
+            ? new[] { @"C:\v\app-4.9.0", @"C:\v\app-4.10.0" } : Array.Empty<string>();
+        Eq(LauncherStub.Resolve(@"C:\v\a.exe", fs(v), vsubs), @"C:\v\app-4.10.0\a.exe",
+           "versions order numerically, not as strings");
+
+        Check(LauncherStub.CompareVersionFolders("app-4.10.0", "app-4.9.0") > 0, "4.10.0 beats 4.9.0");
+        Check(LauncherStub.CompareVersionFolders("app-5.0", "app-4.99.99") > 0, "major version wins");
+        Eq(LauncherStub.CompareVersionFolders("app-4.51.180", "app-4.51.180"), 0, "equal versions compare equal");
+        Eq(LauncherStub.CompareVersionFolders("app-4.51", "app-4.51.0"), 0, "missing segments count as zero");
+        Check(LauncherStub.CompareVersionFolders("app-4.51.180-beta", "app-4.51.179") > 0,
+              "a suffix does not derail the numeric compare");
     }
 
     // --------------------------------------------------------------- routing --
@@ -239,6 +322,7 @@ static class Tests
         CommandLineTests();
         PackageTests();
         ChromiumTests();
+        LauncherStubTests();
         RoutingTests();
         ConfigTests();
         LaunchProbeTests();
