@@ -15,6 +15,26 @@ namespace Twinstall.Core
         }
 
         /// <summary>
+        /// True when this command line actually belongs to the application we configured,
+        /// rather than merely sharing its file name.
+        ///
+        /// Matching on the executable's name alone is not enough, and this was observed, not
+        /// theorised: the Claude Code CLI is also called claude.exe, lives somewhere else
+        /// entirely, and carries no --type= or --user-data-dir. A name-only match counted it
+        /// as a running desktop instance, which is enough to turn a "nothing is running, ask
+        /// the user" into a confident "only one is running" and route a sign-in to an instance
+        /// that was never there.
+        ///
+        /// A different executable inside the same MSIX package still counts — packaged apps
+        /// legitimately run helpers beside the main binary.
+        /// </summary>
+        public static bool RefersToApp(string commandLine, string exePath)
+        {
+            SchemeOwner owner = SchemeMatcher.Classify(commandLine, exePath);
+            return owner == SchemeOwner.Direct || owner == SchemeOwner.SamePackage;
+        }
+
+        /// <summary>
         /// The profile directory this command line selects, or <paramref name="defaultDir"/>
         /// when the flag is absent. Handles quoted and bare values.
         /// </summary>

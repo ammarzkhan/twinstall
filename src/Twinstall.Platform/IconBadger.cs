@@ -18,6 +18,23 @@ namespace Twinstall.Platform
 
         public static void Compose(string sourceImagePath, string outputIcoPath, string hexColour, string label)
         {
+            if (!string.IsNullOrEmpty(sourceImagePath) && File.Exists(sourceImagePath))
+            {
+                using (var src = Image.FromFile(sourceImagePath))
+                    Compose(src, outputIcoPath, hexColour, label);
+            }
+            else
+            {
+                Compose((Image)null, outputIcoPath, hexColour, label);
+            }
+        }
+
+        /// <summary>
+        /// Overload taking an already-loaded image, so a logo read straight out of an
+        /// executable never has to be written to disk just to be read back.
+        /// </summary>
+        public static void Compose(Image source, string outputIcoPath, string hexColour, string label)
+        {
             using (var bmp = new Bitmap(Size, Size, PixelFormat.Format32bppArgb))
             {
                 using (var g = Graphics.FromImage(bmp))
@@ -30,9 +47,8 @@ namespace Twinstall.Platform
 
                     const int inset = 26;                 // room for the badge
                     int baseSize = Size - inset;
-                    if (!string.IsNullOrEmpty(sourceImagePath) && File.Exists(sourceImagePath))
-                        using (var src = Image.FromFile(sourceImagePath))
-                            g.DrawImage(src, 0, 0, baseSize, baseSize);
+                    if (source != null)
+                        g.DrawImage(source, 0, 0, baseSize, baseSize);
 
                     int d = (int)(Size * 0.46);
                     int x = Size - d - 5, y = Size - d - 5, halo = 8;

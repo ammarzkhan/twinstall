@@ -31,29 +31,38 @@ coloured badges on the taskbar icons.
 
 ## Current state — read this carefully
 
-**There is no application yet.** The only `Main()` is the test runner. The MSIX manifest declares
-`Executable="Twinstall.exe"`, which does not exist and nothing builds.
+**The application exists and works.** `Twinstall.exe` builds, routes, launches, badges and
+configures itself, and every adapter has now been executed against real applications. What
+remains unbuilt is packaging, not function.
 
-What exists is a **library**, and it is good: 11 files of pure decision logic with 134 passing
-tests, plus 7 Win32 adapters.
+11 files of pure decision logic with 138 passing tests, 8 Win32 adapters, and one WinForms app.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ written, analysed clean, **134/134 tests passing** |
-| `src/Twinstall.Tests` | ✅ 134 assertions, console runner, exit code is the result |
-| `src/Twinstall.Platform` | ⚠️ analyser-clean; probe/profile/scheme adapters **have run**, the window and icon ones have not |
-| **Detection, all steps** | ✅ **complete and verified against Claude, Slack and VS Code on a real machine** |
-| Router executable | ❌ does not exist |
-| Launcher executable | ❌ does not exist |
-| Installer / first-run UI | ❌ does not exist |
+| `src/Twinstall.Core` | ✅ analysed clean, **138/138 tests passing** |
+| `src/Twinstall.Tests` | ✅ 138 assertions, console runner, exit code is the result |
+| `src/Twinstall.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
+| `src/Twinstall.App` | ✅ `Twinstall.exe` — router, launcher, icon watcher, management UI |
+| **Detection, all steps** | ✅ verified against Claude, Slack and VS Code |
+| Release artifacts | ✅ `scripts/publish.ps1` → two zips + `SHA256SUMS.txt` |
+| Code signing | ❌ unsigned; the real fix for AV/SmartScreen and not yet done |
 | MSIX packaging | ❌ manifest is a sketch with `REPLACE` placeholders and no assets |
+| Store submission | ❌ blocked on the certification question below |
 
-**What has and hasn't run, precisely.** `LaunchProbeRunner`, `ProfileScanner` and `SchemeScanner`
-have been executed end-to-end against three real applications and behave correctly.
-`WindowEnumerator` and `IconBadger` still have not — no live window enumerated, no icon composed
-— and `ProcessMap` has not run either, though `LaunchProbeRunner`'s straggler sweep exercises the
-same WMI mechanism successfully. Those three are the remaining "compiles but never ran" surface,
-and all three are needed by the router.
+**Nothing is left in the "compiles but never ran" category.** Verified on 7 Aug 2026 on a live
+machine: `LogoExtractor` pulled Claude's 256px logo out of its executable, `IconBadger` composed
+and applied badges to two running Claude windows, `WindowEnumerator` found them, `ProcessMap`
+mapped both to the right instances, and a synthetic `claude://` link routed via Z-order without
+spawning a third instance. The log is the evidence:
+
+```
+running instances: 42636=Claude, 31172=Second
+-> Second  (via ZOrder)
+```
+
+**One `Main()` , four modes.** `Program.Main` dispatches on `argv` *before* touching a WinForms
+type, so a protocol callback never pays for loading the UI. Keep it that way — routing sits
+between a browser sign-in and the app opening, with a user waiting.
 
 `reference/` holds the **working** Claude-specific version this is generalised from. It runs on
 the author's machine today. Port from it; don't reinvent it.
@@ -111,12 +120,19 @@ clean, because `AnalysisLevel` in `Directory.Build.props` re-derives the mode an
 dotnet build Twinstall.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
 ```
 
-That reports 7 warnings, all deliberate and all commented at the source: `CA1002` on the
-get-only `AppConfig.Instances`, `CA1031` five times where the documented behaviour is to degrade
+That reports **9 warnings**, all deliberate and all commented at the source: `CA1002` on the
+get-only `AppConfig.Instances`, `CA1031` seven times where the documented behaviour is to degrade
 rather than throw, and `CA1303` on the test runner's own console output. Two of the `CA1031`s
 wrap a **caller-supplied delegate** (`listSubdirectories` in `ChromiumDetector` and
 `LauncherStub`), where catching anything narrower would be guessing at what someone else's
-lambda throws; an unreadable folder must count as a miss, not a crash.
+lambda throws; an unreadable folder must count as a miss, not a crash. CI fails if the count
+goes above 9.
+
+`Twinstall.App` additionally suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` **in that
+project only**, with the reasoning in its `.csproj`. They are WinForms ownership false positives
+— a Form disposes its `Controls`, and `Application.Run` disposes the Form. One consequence worth
+knowing: **a disposable field that is *not* added to `Controls` — a `Font`, `Bitmap` or `Timer` —
+will not be flagged there.** Dispose those yourself.
 
 ---
 
@@ -159,6 +175,27 @@ entirely and use a compiled exe. Be honest in the docs: an unsigned exe in `%LOC
 registered as a handler is *also* a recognised malware pattern. It's narrower privilege, not
 automatically fewer alerts. **Never** advise excluding `powershell.exe` from behavioural
 monitoring.
+
+**`EnableCompressionInSingleFile` gets the build quarantined. Never turn it on.** Measured
+7 Aug 2026: publishing with it produced a binary Bitdefender disinfected *during the build*,
+mid-`GenerateBundle`, on 4/4 attempts. Compression off succeeded; so did the self-contained
+folder layout and the framework-dependent one.
+
+| Layout | Size | Result |
+|---|---|---|
+| Framework-dependent | 0.7 MB | ✅ |
+| Self-contained folder | 160 MB | ✅ |
+| Single-file, uncompressed | 147 MB | ✅ |
+| **Single-file, compressed** | 65 MB | ❌ quarantined, reproducibly |
+
+A compressed payload expanded at run time is the defining shape of a packer. The setting is
+pinned off in `Twinstall.App.csproj` with the reasoning beside it, and `scripts/publish.ps1`
+throws rather than shipping something that was quarantined out from under it.
+
+Note the diagnosis order here, because the repo has burned time on this before: the first theory
+was a transient scanner file-lock, and it was **wrong**. Checking the file's ACLs, attributes and
+open handles took one command and showed nothing abnormal — which is what pointed at
+disinfection. Read the actual state before proposing the second theory.
 
 **Claude's Cowork VM needs a zero-byte VHDX placeholder** in a second instance to suppress a
 first-run error. Empirical, not documented behaviour. Keep it app-specific; don't generalise it.
@@ -271,24 +308,34 @@ Load-bearing properties — don't simplify these away:
 Detection found five real defects in itself while being tested, all recorded in the facts section
 above. That is the argument for running each step against a real machine before moving on.
 
-**3b. `Twinstall.Router` — a new `net8.0-windows` WinExe.**
-Modes: `--launch <instance>`, `--watch [seconds]`, and default `<scheme>://...` routing.
-Wire the existing pieces: `InstanceConfig.Load` → `ProcessMap.Build` →
-`WindowEnumerator.ProcessIdsTopDown` → `RouteDecision.Choose` → launch. Fall back to the default
-profile if the config is missing or corrupt rather than stranding the user. Log every decision,
-**never log URL query strings** (they contain live OAuth codes).
-`reference/router/ClaudeRouter.cs` is the working version — port it.
+**3b–3d. Router, launcher and UI — ✅ DONE.** All three live in `src/Twinstall.App` as one
+`Twinstall.exe`, because the MSIX manifest declares a single executable and a handler that is
+also the app the user configured is easier to reason about than a pair that must stay in step.
 
-**3c. Launcher + icon application.** Start the target on the right profile, then apply the badge
-in a tight loop for ~60s so it lands before the taskbar button exists. `IconBadger.Compose` and
-`.Apply` already exist and are uncalled.
+| File | Job |
+|---|---|
+| `Program.cs` | dispatch on `argv`, **before** any WinForms type is touched |
+| `Router.cs` | routing, launching, icon application, the Cowork VHDX guard |
+| `Registration.cs` | `RegisteredApplications`, shortcuts, taskbar opt-in, full removal |
+| `MainForm.cs` / `InstanceDialog.cs` | management UI, gated by `IsolationCheck` |
+| `Detector.cs` | runs detection steps 0–5 and collects the answers |
+| `Log.cs` | rolling log; **`SafeUrl` is the only way a URL reaches disk** |
 
-**3d. First-run / management UI.** Pick an app (presets or Browse), name instances, choose
-colours, show what will change on the system. `IsolationCheck.Validate` must gate this — refuse
-identical or nested profile directories.
+Things not to undo:
+- **`Log.SafeUrl` strips the query and fragment.** A callback query is a live OAuth code and the
+  log is an ordinary file in the user's profile. Every path that logs a URL goes through it.
+- **A missing or corrupt config falls back to the default profile** rather than stranding
+  someone mid-sign-in. That is what would have happened without Twinstall at all.
+- **`NeedsPrompt` asks.** When nothing is running, Z-order knows nothing; guessing is how a link
+  lands in the wrong account.
+- **The taskbar setting is opt-in**, off by default, and labelled as system-wide.
 
-**3e. Then, and only then, packaging.** Fill in the manifest identity, produce the assets, wire
-`makeappx` in CI (the workflow already has the job).
+**3e. Packaging — still not done, and still blocked.** The manifest has `REPLACE` placeholders
+and no assets, and the certification question below gates it. The CI release job deliberately
+ships zips and **no MSIX**: a packaging job that cannot succeed is worse than no job at all.
+
+**Before packaging, sign.** Unsigned is the single biggest practical problem with the GitHub
+channel — see the antivirus facts above.
 
 ---
 

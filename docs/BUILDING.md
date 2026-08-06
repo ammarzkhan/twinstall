@@ -36,6 +36,51 @@ mcs -out:/tmp/tests.exe -r:/tmp/Twinstall.Core.dll Twinstall.Tests/*.cs
 mono /tmp/tests.exe
 ```
 
+## Releasing
+
+```bash
+pwsh -File scripts/publish.ps1
+```
+
+Runs the tests first and refuses to publish if they fail, then writes two zips and a
+`SHA256SUMS.txt` into `artifacts/`:
+
+| Artifact | Size | Needs |
+|---|---|---|
+| `twinstall-<v>-win-x64.zip` | ~0.7 MB | .NET 8 **Desktop** Runtime on the target machine |
+| `twinstall-<v>-win-x64-standalone.zip` | ~160 MB | nothing |
+
+Prefer the small one where you can. It is not just smaller — a handful of ordinary managed DLLs
+beside a normal apphost is the least unusual thing you can hand an antivirus engine.
+
+### Never enable single-file compression
+
+`EnableCompressionInSingleFile` is pinned **off** in `Twinstall.App.csproj`, and this is not a
+size preference. Measured on 7 August 2026, on a machine running Bitdefender, Defender and
+Malwarebytes:
+
+| Layout | Size | Outcome |
+|---|---|---|
+| Framework-dependent | 0.7 MB | ✅ builds, survives, runs |
+| Self-contained folder | 160 MB | ✅ builds, survives, runs |
+| Single-file, uncompressed | 147 MB | ✅ builds, survives, runs |
+| **Single-file, compressed** | 65 MB | ❌ **quarantined mid-build, 4/4 attempts** |
+
+A compressed payload embedded in an executable and expanded at run time is the structure of a
+packer, which is what malware uses to defeat static analysis. Twinstall is already an unsigned
+protocol handler that reads other processes' command lines; it does not need to look packed too.
+
+**If a publish fails with `GenerateBundle` and `UnauthorizedAccessException`, check your AV logs
+before assuming a file lock.** That was the first theory here and it was wrong — the file's ACLs,
+attributes and open handles were all normal, which is what pointed at disinfection instead.
+`scripts/publish.ps1` now throws with that hint rather than shipping a half-written artifact.
+
+### Signing
+
+Releases are unsigned. An Authenticode certificate is the actual fix for SmartScreen warnings and
+for reputation-based detection; until there is one, published SHA-256 hashes and buildable source
+are the honest substitute. See [SECURITY.md](../SECURITY.md).
+
 ## Verification status
 
 Being precise about this, because "it builds" and "it works" are different claims and the gap
@@ -90,11 +135,16 @@ The stricter pass was not free of findings, though. Two were worth fixing:
 | CA5392 ×7 | every P/Invoke in `NativeMethods` | no `DefaultDllImportSearchPaths`, so the loader searches the application directory before System32. A `user32.dll` dropped beside the exe would win. This exe is registered as a protocol handler and launched by Windows on a URL, which is not a shape where that should be left open |
 | CA1307 | `ProcessMap`, `Replace` building the WMI query | culture-sensitive string comparison — same family as the CA1305 above |
 
-Seven warnings remain at `latest-all` and are all deliberate: `CA1002` on the get-only
-`AppConfig.Instances`, `CA1031` five times where the documented behaviour is to degrade rather
+Nine warnings remain at `latest-all` and are all deliberate: `CA1002` on the get-only
+`AppConfig.Instances`, `CA1031` seven times where the documented behaviour is to degrade rather
 than throw, `CA1303` on the test runner's own console output. Two of those `CA1031`s guard a
 caller-supplied delegate, where narrowing the catch would mean guessing what someone else's
-lambda throws.
+lambda throws. CI fails if the count rises above nine.
+
+`Twinstall.App` also suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` in that project alone,
+with reasons in its `.csproj`. Those are WinForms ownership false positives — a `Form` disposes
+its `Controls`, and `Application.Run` disposes the `Form`. The trade-off to remember: a
+disposable field that is **not** added to `Controls` won't be flagged there either.
 
 **Careful when re-running that check.** `-p:AnalysisMode=All` alone does nothing, because
 `AnalysisLevel` in `Directory.Build.props` re-derives the mode and overrides it — it reports a

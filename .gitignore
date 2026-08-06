@@ -4,6 +4,11 @@ obj/
 *.suo
 .vs/
 
+# Release output from scripts/publish.ps1
+artifacts/
+publish/
+publish-*/
+
 # Build outputs
 *.msix
 *.msixbundle

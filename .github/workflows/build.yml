@@ -33,7 +33,10 @@ jobs:
           $ids = $j.apps.id
           if (($ids | Select-Object -Unique).Count -ne $ids.Count) { throw 'duplicate app ids' }
           foreach ($a in $j.apps) {
-            foreach ($f in 'id','displayName','scheme','exeName') {
+            # Deliberately NOT checking for a 'scheme' field. Presets carry no scheme and no
+            # profile path - both are derived at run time by docs/DETECTION.md. An earlier
+            # version of this check required one and would have failed on every entry.
+            foreach ($f in 'id','displayName','exeName') {
               if (-not $a.$f) { throw "app '$($a.id)' is missing $f" }
             }
           }
@@ -63,15 +66,28 @@ jobs:
           dotnet run --project src/Twinstall.Tests -c Release --no-build
           if ($LASTEXITCODE -ne 0) { throw "unit tests failed (exit $LASTEXITCODE)" }
 
-      - name: Publish router binaries
-        run: >
-          dotnet publish src/Twinstall.Platform -c Release --no-build
-          -o artifacts/platform
+      - name: Analyser sweep
+        shell: pwsh
+        run: |
+          # AnalysisMode=All alone does nothing here - AnalysisLevel in Directory.Build.props
+          # re-derives the mode and wins, reporting a false clean. Use latest-all.
+          $out = dotnet build Twinstall.sln -c Release --no-incremental `
+                   -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false 2>&1 | Out-String
+          $warnings = ([regex]::Matches($out, ': warning ')).Count
+          "analyser warnings at latest-all: $warnings"
+          # Nine are deliberate and documented in CLAUDE.md. More than that wants a look.
+          if ($warnings -gt 9) { $out | Write-Host; throw "unexpected analyser warnings ($warnings > 9)" }
+
+      - name: Publish release artifacts
+        shell: pwsh
+        run: pwsh -File scripts/publish.ps1
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Twinstall-build
-          path: artifacts/platform
+          name: twinstall-artifacts
+          path: |
+            artifacts/*.zip
+            artifacts/SHA256SUMS.txt
 
   # ---------------------------------------------------------------------------
   # Guards the architecture, not the product.
@@ -97,40 +113,32 @@ jobs:
         run: dotnet run --project src/Twinstall.Tests -c Release --no-build
 
   # ---------------------------------------------------------------------------
-  # Tagged releases only.
+  # Tagged releases only. Publishes the zips and their hashes to a GitHub release.
+  #
+  # There is deliberately no MSIX step here yet. The manifest still carries REPLACE
+  # placeholders and has no assets, and the question that gates it — whether Store
+  # certification accepts an app declaring another vendor's URL scheme — is still
+  # unanswered. A packaging job that cannot succeed is worse than no job at all.
   # ---------------------------------------------------------------------------
-  package:
+  release:
     needs: [windows, core-portability]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/download-artifact@v4
         with:
-          name: Twinstall-build
-          path: artifacts/platform
+          name: twinstall-artifacts
+          path: artifacts
 
-      - name: Package MSIX
-        shell: pwsh
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # makeappx ships with the Windows SDK, which is present on the hosted runners.
-          $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory |
-                 Where-Object { $_.Name -match '^10\.' } |
-                 Sort-Object Name -Descending | Select-Object -First 1
-          if (-not $sdk) { throw 'no Windows SDK found on the runner' }
-          $makeappx = Join-Path $sdk.FullName 'x64\makeappx.exe'
-          if (-not (Test-Path $makeappx)) { throw "makeappx not found under $($sdk.FullName)" }
-
-          Copy-Item artifacts/platform/* src/Twinstall.Package -Recurse -Force
-          & $makeappx pack /d src/Twinstall.Package /p Twinstall.msix /o
-          if ($LASTEXITCODE -ne 0) { throw "makeappx failed (exit $LASTEXITCODE)" }
-
-          # Store submissions are signed by Microsoft; this hash is for the GitHub channel,
-          # where people need a way to check what they downloaded.
-          Get-FileHash Twinstall.msix -Algorithm SHA256 | Format-List
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Twinstall-msix
-          path: Twinstall.msix
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "Twinstall ${GITHUB_REF_NAME}" \
+            --notes "See CHANGELOG.md. These binaries are UNSIGNED — read SECURITY.md before running them, and verify against SHA256SUMS.txt." \
+            artifacts/*.zip artifacts/SHA256SUMS.txt

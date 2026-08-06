@@ -35,6 +35,17 @@ namespace Twinstall.Platform
         [DllImport("user32.dll", CharSet = CharSet.Unicode), DefaultDllImportSearchPaths(Sys32)]
         internal static extern IntPtr LoadImage(IntPtr hInst, string name, uint type, int cx, int cy, uint load);
 
+        // ExtractAssociatedIcon only ever yields 32x32, which looks like porridge once a badge
+        // is composited over it at taskbar size. PrivateExtractIcons asks for an exact size and
+        // returns the real 256px entry when the executable has one.
+        [DllImport("user32.dll", CharSet = CharSet.Unicode), DefaultDllImportSearchPaths(Sys32)]
+        internal static extern int PrivateExtractIcons(
+            string fileName, int index, int cx, int cy, IntPtr[] icons, int[] ids, int count, uint flags);
+
+        [DllImport("user32.dll"), DefaultDllImportSearchPaths(Sys32)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool DestroyIcon(IntPtr hIcon);
+
         internal const uint GW_HWNDNEXT     = 2;
         internal const uint IMAGE_ICON      = 1;
         internal const uint LR_LOADFROMFILE = 0x0010;

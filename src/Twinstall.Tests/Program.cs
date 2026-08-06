@@ -67,6 +67,19 @@ static class Tests
 
         Check(CommandLine.IsChildProcess(@"App.exe --type=renderer"), "renderer detected");
         Check(!CommandLine.IsChildProcess(@"App.exe --user-data-dir=C:\p\x"), "main process not a child");
+
+        // Observed on a real machine: the Claude Code CLI is also called claude.exe, lives
+        // elsewhere, and was being counted as a running desktop instance. That is enough to
+        // turn "nothing running, ask" into "only one running" and route a sign-in nowhere.
+        const string desktop = @"C:\Program Files\WindowsApps\Claude_1.0_x64__abc\app\claude.exe";
+        Check(CommandLine.RefersToApp("\"" + desktop + "\" --user-data-dir=\"C:\\p\\x\"", desktop),
+              "the configured executable refers to the app");
+        Check(!CommandLine.RefersToApp(@"C:\Users\a\AppData\Roaming\Claude\claude-code\2.1\claude.exe --stream", desktop),
+              "a same-named CLI elsewhere is not the app");
+        Check(CommandLine.RefersToApp(
+                "\"C:\\Program Files\\WindowsApps\\Claude_1.0_x64__abc\\app\\helper.exe\"", desktop),
+              "a helper in the same package is the app");
+        Check(!CommandLine.RefersToApp(null, desktop), "a null command line refers to nothing");
     }
 
     // ------------------------------------------------------------- packaging --
