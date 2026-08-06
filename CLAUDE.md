@@ -34,26 +34,26 @@ coloured badges on the taskbar icons.
 **There is no application yet.** The only `Main()` is the test runner. The MSIX manifest declares
 `Executable="Twinstall.exe"`, which does not exist and nothing builds.
 
-What exists is a **library**, and it is good: 9 files of pure decision logic with 95 passing
-tests, plus 5 thin Win32 adapters.
+What exists is a **library**, and it is good: 11 files of pure decision logic with 134 passing
+tests, plus 7 Win32 adapters.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ written, analysed clean, **95/95 tests passing** |
-| `src/Twinstall.Tests` | ✅ 95 assertions, console runner, exit code is the result |
-| `src/Twinstall.Platform` | ⚠️ analyser-clean against the real BCL; `LaunchProbeRunner` **has now run**, the rest has not |
+| `src/Twinstall.Core` | ✅ written, analysed clean, **134/134 tests passing** |
+| `src/Twinstall.Tests` | ✅ 134 assertions, console runner, exit code is the result |
+| `src/Twinstall.Platform` | ⚠️ analyser-clean; probe/profile/scheme adapters **have run**, the window and icon ones have not |
+| **Detection, all steps** | ✅ **complete and verified against Claude, Slack and VS Code on a real machine** |
 | Router executable | ❌ does not exist |
 | Launcher executable | ❌ does not exist |
 | Installer / first-run UI | ❌ does not exist |
-| Detection step 5 (launch test) | ✅ **verified against Claude, Slack and VS Code on a real machine** |
-| Detection steps 3–4 | ❌ not implemented (see `docs/DETECTION.md`) |
 | MSIX packaging | ❌ manifest is a sketch with `REPLACE` placeholders and no assets |
 
-**What has and hasn't run, precisely.** `LaunchProbeRunner` — process start, marker polling,
-process-tree kill, WMI straggler sweep, directory cleanup — has been executed against three real
-applications and behaves correctly. `WindowEnumerator`, `ProcessMap` and `IconBadger` still have
-not: no live window has been enumerated, no WMI process map built, no icon composed. Those three
-are the remaining "compiles but never ran" surface.
+**What has and hasn't run, precisely.** `LaunchProbeRunner`, `ProfileScanner` and `SchemeScanner`
+have been executed end-to-end against three real applications and behave correctly.
+`WindowEnumerator` and `IconBadger` still have not — no live window enumerated, no icon composed
+— and `ProcessMap` has not run either, though `LaunchProbeRunner`'s straggler sweep exercises the
+same WMI mechanism successfully. Those three are the remaining "compiles but never ran" surface,
+and all three are needed by the router.
 
 `reference/` holds the **working** Claude-specific version this is generalised from. It runs on
 the author's machine today. Port from it; don't reinvent it.
@@ -92,7 +92,7 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 95   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 134   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
@@ -203,32 +203,73 @@ was actually measured. `verified: true` still means end-to-end, not "detection w
 VS Code took 14s on the first run against a cold profile. A 10s timeout would have produced a
 false "this app doesn't support profiles".
 
+**A scheme's registered handler does not tell you whose scheme it is.** On the dev machine
+`HKCU\Software\Classes\claude\shell\open\command` points at **`ClaudeRouter.exe`** — the
+predecessor tool — not at Claude. Matching only on "the command references this executable"
+therefore finds nothing for precisely the app Twinstall exists to fix, because an
+already-taken-over scheme is the normal state of a machine that has been set up before.
+
+So step 4 uses two sources: the registry for *who holds it now*, and the package manifest for
+*whose it is*. `SchemeOwner` reports `Direct`, `SamePackage`, `Foreign` or `Unknown`, and a
+scheme the package declares is kept even when a foreign handler holds it. The first-run UI should
+show the current holder rather than silently taking over.
+
+**An MSIX package manifest can be read straight off disk — no WinRT needed.**
+`C:\Program Files\WindowsApps\<PackageFullName>\AppxManifest.xml` is readable despite the
+folder's ACLs, and `<uap3:Protocol Name="claude" />` is right there. This matters more than it
+sounds: `PackageManager` would have forced `Twinstall.Platform` onto a
+`net8.0-windows10.0.19041.0` target and dragged WinRT into the build. Parsing the XML instead
+keeps the logic in **Core**, where it is unit-tested and runs on Ubuntu in CI.
+
+**`InternalName` is worthless for identifying an Electron app.** VS Code's is literally
+`electron`, and so is most of the ecosystem's; `%APPDATA%\electron` is a real folder on some
+machines. Matching it would confidently select a stranger's profile.
+`ProfileDiscovery.NonIdentifyingNames` filters it. **Only add to that list when you have actually
+seen a collision** — it is a list of observations, not a guess.
+
+**`%APPDATA%` is not a profile root, it is a haystack.** Scanning it for folders containing a
+`Local State` returns **12** on the dev machine — every Electron app installed, from Docker
+Desktop to Riot Client. "Has Chromium markers" barely narrows anything; the folder-name match
+against the app's own names is what actually identifies the profile, and "most recently modified"
+is an actively misleading tie-break on a shared root because it just picks whatever you used
+last. Packaged apps get a private root and return one or two, so this is an unpackaged-only
+problem.
+
 ---
 
 ## What to build next — Stage 3
 
 Order matters; each step is testable before the next.
 
-**3a. Finish detection (`docs/DETECTION.md` steps 3–5).** Steps 1–2 and 5 exist; 3–4 remain.
-- Profile discovery (step 3): read the app's `Local State` / package layout to find the existing
-  profile — **not written**
-- Scheme discovery (step 4): read the registry and, for packaged apps, the package manifest —
-  **not written**
-- ✅ **The launch test (step 5)** — `LaunchProbe` (decisions, tested) and `LaunchProbeRunner`
-  (process start, polling, cleanup). This is the safety mechanism the whole detection design
-  rests on; without it Twinstall can commit to a profile the app ignores.
+**3a. Detection — ✅ DONE, all steps, verified on a real machine (7 Aug 2026).**
 
-  Two properties in there are load-bearing, so don't simplify them away. The probe directory is
-  validated against the profiles already in use, because this is the one detection step that
-  launches the real app and writes to disk — aimed at live data, the check meant to protect a
-  profile would corrupt it. And cleanup sweeps by probe token rather than only killing the child
-  handle, because an app that *ignores* the flag re-parents onto the existing instance, which the
-  handle no longer covers; a stray window left open looks exactly like the bug being tested for.
+| Step | Decisions (Core) | Observation (Platform) |
+|---|---|---|
+| 0 — resolve launcher stub | `LauncherStub` | — |
+| 1 — is it Chromium? | `ChromiumDetector` | — |
+| 2 — where is the profile root? | `PackagePaths` | — |
+| 3 — which folder is the profile? | `ProfileDiscovery` | `ProfileScanner` |
+| 4 — which URL scheme? | `SchemeMatcher` | `SchemeScanner` |
+| 5 — launch test | `LaunchProbe` | `LaunchProbeRunner` |
 
-  ✅ **Run against real applications on 7 Aug 2026** — Claude (Store/MSIX), Slack (Squirrel) and
-  VS Code (commit-hash layout). Correct verdict in every case, cleanup clean every time, no
-  stragglers, and two already-running instances left untouched. It found three real detection
-  defects in the process; see the facts section above.
+End-to-end on Claude (Store/MSIX), Slack (Squirrel stub) and VS Code (commit-hash layout): all
+three resolved, profiled, scheme-matched and probed correctly. Profile scan 12–25 ms, scheme scan
+47–83 ms, probe 1.4–4.4 s.
+
+Load-bearing properties — don't simplify these away:
+- **The probe directory is validated against profiles already in use.** This is the one step that
+  launches the real app and writes to disk; aimed at live data, the check meant to protect a
+  profile would corrupt it.
+- **Cleanup sweeps by probe token, not just the child handle.** An app that *ignores* the flag
+  re-parents onto the existing instance, which the handle no longer covers, and a stray window
+  looks exactly like the bug being tested for.
+- **Step 1 is not a gate on its own.** The subdirectory sweep means a bundled WebView2 runtime can
+  score like Electron; only step 5 settles it.
+- **Step 4 keeps package-declared schemes even when a foreign handler holds them.** Otherwise the
+  already-hijacked case — the normal one — finds nothing.
+
+Detection found five real defects in itself while being tested, all recorded in the facts section
+above. That is the argument for running each step against a real machine before moving on.
 
 **3b. `Twinstall.Router` — a new `net8.0-windows` WinExe.**
 Modes: `--launch <instance>`, `--watch [seconds]`, and default `<scheme>://...` routing.

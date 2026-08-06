@@ -315,6 +315,141 @@ static class Tests
         Check(!LaunchProbe.IsSafeTarget("", live), "an empty probe directory is refused");
     }
 
+    // ----------------------------------------------------- profile discovery --
+    static ProfileCandidate Candidate(string dir, int score, bool localState, int daysAgo)
+    {
+        return new ProfileCandidate(dir, score, localState,
+            new DateTimeOffset(2026, 8, 7, 0, 0, 0, TimeSpan.Zero).AddDays(-daysAgo));
+    }
+
+    static void ProfileDiscoveryTests()
+    {
+        // VS Code's ProductName is "Visual Studio Code" but its profile folder is "Code".
+        // Only the executable's own file name matches, which is why it is in the list.
+        IList<string> vsc = ProfileDiscovery.IdentityNames(
+            @"C:\p\Microsoft VS Code\Code.exe", "Visual Studio Code", "Visual Studio Code", "Code.exe");
+        Check(ProfileDiscovery.NameMatches("Code", vsc), "exe base name identifies the folder");
+        Check(ProfileDiscovery.NameMatches("Visual Studio Code", vsc), "product name also identifies it");
+        Check(!ProfileDiscovery.NameMatches("Codex", vsc), "a near miss is not a match");
+        Check(!ProfileDiscovery.NameMatches("Slack", vsc), "an unrelated folder is not a match");
+
+        // VS Code's real InternalName is "electron", shared by most Electron apps, and
+        // %APPDATA%\electron exists on some machines. Matching it would pick a stranger's
+        // profile with full confidence.
+        Check(!ProfileDiscovery.NameMatches("electron", vsc), "the shared Electron internal name identifies nothing");
+        Eq(vsc.Count, 2, "only Code and Visual Studio Code survive as identities");
+
+        // The real %APPDATA% on the test machine: twelve Electron apps, all with Local State.
+        // Markers cannot discriminate here; only the name can.
+        var shared = new List<ProfileCandidate> {
+            Candidate(@"C:\r\ClickUp",        3, true, 0),   // most recently used decoy
+            Candidate(@"C:\r\Discord",        3, true, 1),
+            Candidate(@"C:\r\Code",           3, true, 9),   // the one we actually want
+            Candidate(@"C:\r\Docker Desktop", 2, true, 2)
+        };
+        ProfileDiscoveryResult r = ProfileDiscovery.Rank(shared, vsc);
+        Eq(r.Outcome, ProfileDiscoveryOutcome.Unique, "a name match resolves a crowded root");
+        Eq(r.Best.Name, "Code", "the name match wins over the most recently modified");
+        Eq(r.Ranked.Count, 4, "the others are still reported for the user to see");
+        Check(r.Ranked[0].NameMatched, "the winner is flagged as a name match");
+
+        // Claude: its own root, holding the original profile and a Twinstall second instance.
+        IList<string> claude = ProfileDiscovery.IdentityNames(@"C:\wa\Claude_x\app\claude.exe", "Claude", null, null);
+        var twoProfiles = new List<ProfileCandidate> {
+            Candidate(@"C:\r\Claude", 3, true, 5),
+            Candidate(@"C:\r\second", 3, true, 0)
+        };
+        r = ProfileDiscovery.Rank(twoProfiles, claude);
+        Eq(r.Outcome, ProfileDiscoveryOutcome.Unique, "the original profile is identifiable");
+        Eq(r.Best.Name, "Claude", "'second' does not outrank 'Claude' by being newer");
+
+        // No name match and several candidates: say so rather than guess.
+        r = ProfileDiscovery.Rank(shared, ProfileDiscovery.IdentityNames(@"C:\p\Unknown.exe", null, null, null));
+        Eq(r.Outcome, ProfileDiscoveryOutcome.Ambiguous, "no name match among several is ambiguous");
+        Eq(r.Best.Name, "ClickUp", "with nothing better, most recently modified leads");
+
+        // One candidate needs no name match to be the answer.
+        r = ProfileDiscovery.Rank(new List<ProfileCandidate> { Candidate(@"C:\r\Whatever", 1, false, 3) },
+                                  ProfileDiscovery.IdentityNames(@"C:\p\App.exe", null, null, null));
+        Eq(r.Outcome, ProfileDiscoveryOutcome.Unique, "a lone candidate is the answer");
+
+        // Folders with no markers are not profiles.
+        r = ProfileDiscovery.Rank(new List<ProfileCandidate> { Candidate(@"C:\r\Empty", 0, false, 1) }, claude);
+        Eq(r.Outcome, ProfileDiscoveryOutcome.NoneFound, "no markers means the app has never run");
+        Eq(r.Best, null, "nothing found means no best");
+
+        Eq(ProfileDiscovery.Rank(null, claude).Outcome, ProfileDiscoveryOutcome.NoRoot, "null input is NoRoot");
+
+        // Local State outranks a folder with only corroborating markers.
+        r = ProfileDiscovery.Rank(new List<ProfileCandidate> {
+            Candidate(@"C:\r\a", 2, false, 0),
+            Candidate(@"C:\r\b", 1, true,  9)
+        }, ProfileDiscovery.IdentityNames(@"C:\p\None.exe", null, null, null));
+        Eq(r.Best.Name, "b", "Local State is definitive, other markers only corroborate");
+    }
+
+    // -------------------------------------------------------- scheme matching --
+    static void SchemeMatcherTests()
+    {
+        Eq(SchemeMatcher.ExtractExecutable("\"C:\\a\\App.exe\" \"%1\""), @"C:\a\App.exe", "quoted handler");
+        Eq(SchemeMatcher.ExtractExecutable(@"C:\a\App.exe %1"), @"C:\a\App.exe", "bare handler");
+
+        // VS Code puts flags between the exe and %1; taking the whole string never matches.
+        Eq(SchemeMatcher.ExtractExecutable("\"C:\\p\\Microsoft VS Code\\Code.exe\" --open-url -- \"%1\""),
+           @"C:\p\Microsoft VS Code\Code.exe", "arguments before %1 are discarded");
+        Eq(SchemeMatcher.ExtractExecutable(""), "", "empty command");
+        Eq(SchemeMatcher.ExtractExecutable(null), "", "null command");
+        Eq(SchemeMatcher.ExtractExecutable("\"unterminated"), "", "unterminated quote is not a path");
+
+        const string slack = @"C:\Users\a\AppData\Local\slack\app-4.51.180\slack.exe";
+        Eq(SchemeMatcher.Classify("\"" + slack + "\" \"%1\"", slack), SchemeOwner.Direct, "handler is the app");
+
+        // The real state of this machine: claude:// is held by the predecessor router.
+        const string claudeExe = @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc\app\claude.exe";
+        Eq(SchemeMatcher.Classify("\"C:\\Users\\a\\AppData\\Local\\ClaudeRouter\\ClaudeRouter.exe\" \"%1\"", claudeExe),
+           SchemeOwner.Foreign, "a scheme already taken over reads as foreign");
+
+        // A helper inside the same package is still the app.
+        Eq(SchemeMatcher.Classify(
+             "\"C:\\Program Files\\WindowsApps\\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc\\app\\resources\\helper.exe\" \"%1\"",
+             claudeExe),
+           SchemeOwner.SamePackage, "same package family counts as the app");
+
+        // Different package, same publisher shape: must not be confused for ours.
+        Eq(SchemeMatcher.Classify(
+             "\"C:\\Program Files\\WindowsApps\\Other_1.0.0.0_x64__pzs8sxrjxfjjc\\app\\other.exe\" \"%1\"",
+             claudeExe),
+           SchemeOwner.Foreign, "a different package is foreign even under one publisher");
+
+        Eq(SchemeMatcher.Classify("", claudeExe), SchemeOwner.Unknown, "no command is unknown");
+        Eq(SchemeMatcher.Classify("\"x.exe\"", ""), SchemeOwner.Unknown, "no target is unknown");
+
+        // Manifest parsing: namespace prefix must not matter.
+        const string manifest =
+            "<Package xmlns=\"http://schemas.microsoft.com/appx/manifest/foundation/windows10\" " +
+            "xmlns:uap=\"http://schemas.microsoft.com/appx/manifest/uap/windows10\" " +
+            "xmlns:uap3=\"http://schemas.microsoft.com/appx/manifest/uap/windows10/3\">" +
+            "<Applications><Application Id=\"Claude\"><Extensions>" +
+            "<uap3:Extension Category=\"windows.protocol\"><uap3:Protocol Name=\"claude\" /></uap3:Extension>" +
+            "<uap:Extension Category=\"windows.protocol\"><uap:Protocol Name=\"anthropic\" /></uap:Extension>" +
+            "<uap:Extension Category=\"windows.protocol\"><uap:Protocol Name=\"CLAUDE\" /></uap:Extension>" +
+            "</Extensions></Application></Applications></Package>";
+
+        IList<string> protocols = SchemeMatcher.ProtocolsFromManifest(manifest);
+        Eq(protocols.Count, 2, "duplicate scheme names collapse case-insensitively");
+        Eq(protocols[0], "claude", "uap3 protocol read");
+        Eq(protocols[1], "anthropic", "uap protocol read");
+
+        Eq(SchemeMatcher.ProtocolsFromManifest("<not xml").Count, 0, "malformed manifest yields nothing");
+        Eq(SchemeMatcher.ProtocolsFromManifest(null).Count, 0, "null manifest yields nothing");
+        Eq(SchemeMatcher.ProtocolsFromManifest("<Package />").Count, 0, "a manifest with no protocols is empty");
+
+        // The package directory the manifest is read from.
+        Eq(PackagePaths.PackageRoot(claudeExe),
+           @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc", "package root derived");
+        Eq(PackagePaths.PackageRoot(@"C:\Users\a\AppData\Local\slack\slack.exe"), null, "unpackaged has no root");
+    }
+
     static int Main()
     {
         PathTests();
@@ -326,6 +461,8 @@ static class Tests
         RoutingTests();
         ConfigTests();
         LaunchProbeTests();
+        ProfileDiscoveryTests();
+        SchemeMatcherTests();
 
         Console.WriteLine();
         Console.WriteLine("passed: " + passed + "   failed: " + failed);

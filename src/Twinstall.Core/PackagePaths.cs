@@ -41,6 +41,24 @@ namespace Twinstall.Core
         }
 
         /// <summary>
+        /// The package's own directory (…\WindowsApps\&lt;PackageFullName&gt;), or null when
+        /// unpackaged. AppxManifest.xml sits directly inside it, and reading that file is how
+        /// scheme discovery learns which protocols a package declares without needing WinRT.
+        /// </summary>
+        public static string PackageRoot(string exePath)
+        {
+            if (string.IsNullOrWhiteSpace(exePath)) return null;
+            string p = exePath.Replace('/', PathUtil.Sep);
+            int i = p.IndexOf(WindowsAppsSegment, StringComparison.OrdinalIgnoreCase);
+            if (i < 0) return null;
+
+            int start = i + WindowsAppsSegment.Length;
+            int end = p.IndexOf(PathUtil.Sep, start);
+            if (end <= start) return null;
+            return PathUtil.Normalise(p.Substring(0, end));
+        }
+
+        /// <summary>
         /// Root directory holding the app's profile folders.
         /// Packaged:   &lt;localAppData&gt;\Packages\&lt;family&gt;\LocalCache\Roaming
         /// Unpackaged: &lt;roamingAppData&gt;

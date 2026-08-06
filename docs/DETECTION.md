@@ -85,6 +85,9 @@ unpackaged ones don't.
 
 ## Step 3 — Which folder in that root is the existing profile?
 
+**Implemented.** `ProfileDiscovery` (ranking, tested) and `ProfileScanner` (enumerate, stat, read
+version resources).
+
 Scan one level deep for Chromium's own markers:
 
 - `Local State` (definitive)
@@ -93,25 +96,73 @@ Scan one level deep for Chromium's own markers:
 
 Rank candidates by:
 
-1. folder name matching the exe's `ProductName`, `FileDescription` or internal name
-2. most recently modified
+1. folder name matching the exe's `ProductName`, `FileDescription`, **executable base name**, or
+   internal name
+2. `Local State` present
+3. marker count
+4. most recently modified
 
 One match ⇒ done. Several ⇒ show them and let the user confirm. None ⇒ the app has never run;
 ask them to launch it once.
+
+**Why the ranking order is what it is.** `%APPDATA%` is shared by every unpackaged Electron app.
+Measured on the dev machine, scanning it for folders with a `Local State` returned **12** —
+Docker Desktop, Riot Client, ClickUp, Discord and the rest. The markers barely narrow anything;
+the **name match is what identifies the app**, and it has to outrank recency, because "most
+recently modified" on a shared root just picks whatever you used last. Packaged apps get a
+private root and return one or two.
+
+Two refinements that came out of running it:
+
+- **The executable's base name belongs in the identity list.** VS Code's `ProductName` is
+  "Visual Studio Code" but its profile folder is `Code`. Only the file name matches.
+- **`InternalName` must be filtered.** VS Code's is literally `electron`, as is most of the
+  ecosystem's, and `%APPDATA%\electron` exists on some machines — matching it would select a
+  stranger's profile with full confidence. See `ProfileDiscovery.NonIdentifyingNames`, and only
+  extend that list from observed collisions.
 
 ---
 
 ## Step 4 — What URL scheme does it use?
 
+**Implemented.** `SchemeMatcher` (classification and manifest parsing, tested) and
+`SchemeScanner` (registry sweep, manifest read).
+
 Also derived, not listed. Enumerate `HKCU\Software\Classes` and `HKLM\Software\Classes` for
-keys that have a `URL Protocol` value, read each one's `shell\open\command`, and keep the ones
-whose command references this executable — or, for packaged apps, its PackageFamilyName.
+keys that have a `URL Protocol` value, read each one's `shell\open\command`, and classify:
 
-For MSIX targets, additionally read the package's own `windows.protocol` extensions through
-`PackageManager`, since a packaged app's associations may not appear in `Software\Classes` at
-all.
+| `SchemeOwner` | Meaning |
+|---|---|
+| `Direct` | the command points at exactly this executable |
+| `SamePackage` | a different executable inside the same MSIX package — still the app |
+| `Foreign` | something else handles this scheme today |
+| `Unknown` | the command could not be parsed |
 
-That discovers `slack://`, `discord://`, `claude://` and anything else with no hardcoded list.
+**The registered handler does not tell you whose scheme it is.** On the dev machine,
+`HKCU\Software\Classes\claude` points at `ClaudeRouter.exe` — the predecessor tool. Keeping only
+registrations that reference the app would find **nothing** for exactly the app this project
+exists to fix, because a scheme that has already been taken over is the normal state of a machine
+someone has set up before.
+
+So for packaged apps, also read the protocols the package *declares*, and keep those even when a
+foreign handler currently holds them. The first-run UI should show the current holder rather than
+silently taking over.
+
+**Read `AppxManifest.xml` off disk, not through `PackageManager`.**
+`C:\Program Files\WindowsApps\<PackageFullName>\AppxManifest.xml` is readable despite the folder's
+ACLs, and the `<uap3:Protocol Name="…" />` elements are right there. `PackageManager` would force
+`Twinstall.Platform` onto a `net8.0-windows10.0.19041.0` target and pull WinRT into the build;
+parsing the XML keeps the logic in Core, unit-tested, and running on Ubuntu in CI. Match on the
+element's **local name** so any namespace prefix works.
+
+Two parsing details that bite:
+
+- **Take only the first token of the command.** VS Code registers
+  `"…\Code.exe" --open-url -- "%1"`; comparing the whole string against a path never matches.
+- Schemes never contain a dot, so skipping keys with one avoids opening several thousand file
+  extensions and ProgIds. The full sweep costs ~50–85 ms with that filter.
+
+That discovers `slack://`, `vscode://`, `claude://` and anything else with no hardcoded list.
 If nothing is found, the app simply doesn't use callback sign-in and needs no routing — which
 is a valid outcome, not a failure.
 

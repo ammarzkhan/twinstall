@@ -43,9 +43,9 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstall.Core` (9 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **95 assertions, all passing** | **yes — suite executed** |
-| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 95  failed: 0`** |
-| `Twinstall.Platform` (5 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **`LaunchProbeRunner` yes; the other four no** |
+| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **134 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 134  failed: 0`** |
+| `Twinstall.Platform` (7 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **probe/profile/scheme yes; window and icon no** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
 
 The first three rows changed on 7 August 2026, when the suite was first run on a real Windows
@@ -100,23 +100,28 @@ lambda throws.
 `AnalysisLevel` in `Directory.Build.props` re-derives the mode and overrides it — it reports a
 clean build that is not clean. Use `-p:AnalysisLevel=latest-all`.
 
-**Three of the five adapters have still never executed.** `WindowEnumerator`, `ProcessMap` and
-`IconBadger` were ported from code that demonstrably worked in the Claude-specific tool, but this
-exact code has not run once: no live window enumerated, no WMI process map built, no icon
-composed. Compiling against the real BCL is a stronger claim than it was; it is not the same
+**Three of the seven adapters have still never executed:** `WindowEnumerator`, `IconBadger` and
+`ProcessMap`. No live window enumerated, no icon composed, no WMI process map built. They were
+ported from code that demonstrably worked in the Claude-specific tool, but this exact code has
+not run once. Compiling against the real BCL is a stronger claim than it was; it is not the same
 claim. The logic they *contain* is minimal by design — every decision was pushed into
 `Twinstall.Core`, where it is tested. A wrong P/Invoke signature or a GDI+ call in the wrong
-order would still get through everything above.
+order would still get through everything above. **All three are needed by the router**, so 3b is
+where they get their first real exercise.
 
-**`LaunchProbeRunner` has now run**, on 7 August 2026, against Claude (Store/MSIX), Slack
-(Squirrel) and VS Code. Process start, marker polling, process-tree kill, the WMI straggler sweep
-and directory cleanup all behaved correctly; two already-running instances were left untouched
-throughout. It also earned its keep immediately by exposing three detection defects that the
-marker heuristic alone would have shipped — see CLAUDE.md's facts section.
+`ProcessMap` is the least worrying of the three: `LaunchProbeRunner`'s straggler sweep drives the
+same `ManagementObjectSearcher` pattern successfully on this machine, so the mechanism works even
+though this particular query has not been run.
 
-That leaves `ProcessMap` as the interesting untested one: it is the other WMI consumer, and the
-straggler sweep in `LaunchProbeRunner` exercises the same `ManagementObjectSearcher` pattern
-successfully, so the mechanism is at least known to work on this machine.
+**`LaunchProbeRunner`, `ProfileScanner` and `SchemeScanner` have now run**, on 7 August 2026,
+against Claude (Store/MSIX), Slack (Squirrel) and VS Code. Process start, marker polling,
+process-tree kill, the WMI straggler sweep, directory cleanup, profile enumeration, version-
+resource reads, the registry sweep and the package-manifest read all behaved correctly; two
+already-running instances were left untouched throughout.
+
+They earned their keep immediately, exposing five detection defects that the heuristics alone
+would have shipped — see CLAUDE.md's facts section. Timings, for reference when something later
+feels slow: profile scan 12–25 ms, scheme scan 47–83 ms, launch probe 1.4–4.4 s.
 
 **Reproducing the stub analyser pass** is a temporary-project trick, not part of the build: a
 throwaway `.csproj` targeting `net8.0` with `EnableDefaultCompileItems=false`, `Compile Include`
