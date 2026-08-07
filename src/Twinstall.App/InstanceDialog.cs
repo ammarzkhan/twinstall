@@ -21,7 +21,11 @@ namespace Twinstall.App
         private readonly string _profileRoot;
         private readonly List<string> _otherProfiles;
         private readonly bool _isNew;
+        private FlatButton _picture;
         private string _colour;
+
+        /// <summary>Path to a picture used instead of the coloured disc, or null.</summary>
+        private string _image;
 
         internal Instance Value { get; private set; }
 
@@ -93,12 +97,21 @@ namespace Twinstall.App
             browse.Click += (s, e) => Browse();
             Add(browse);
 
-            Add(Caption("Badge colour", 150));
+            Add(Caption("Badge", 150));
             _swatches.Location = new Point(24, 172);
-            _swatches.Size = new Size(472, 34);
+            _swatches.Size = new Size(340, 34);
             _swatches.BackColor = Theme.Background;
             BuildSwatches();
             Add(_swatches);
+
+            _image = existing?.Image;
+            _picture = new FlatButton(PictureLabel(), ButtonKind.Secondary)
+            {
+                Location = new Point(374, 172),
+                Size = new Size(122, 34)
+            };
+            _picture.Click += (s, e) => ChoosePicture();
+            Add(_picture);
 
             _badge.Text = "  Show a coloured badge on this account's taskbar icon";
             _badge.Font = Theme.Body;
@@ -185,8 +198,34 @@ namespace Twinstall.App
             t.Font = Theme.Body;
         }
 
+        private void RebuildSwatches()
+        {
+            foreach (Control c in new List<Control>(_swatches.Controls.Cast<Control>()))
+            {
+                _swatches.Controls.Remove(c);
+                c.Dispose();
+            }
+            BuildSwatches();
+        }
+
         private void BuildSwatches()
         {
+            // A picture replaces the colour entirely, so offering swatches alongside it would
+            // be offering a choice that does nothing.
+            if (!string.IsNullOrEmpty(_image))
+            {
+                _swatches.Controls.Add(new Label
+                {
+                    Text = "Using " + System.IO.Path.GetFileName(_image),
+                    Font = Theme.Small,
+                    ForeColor = Theme.TextMuted,
+                    AutoSize = false,
+                    Location = new Point(2, 8),
+                    Size = new Size(336, 22)
+                });
+                return;
+            }
+
             int x = 0;
             foreach (string hex in Palette)
             {
@@ -201,18 +240,47 @@ namespace Twinstall.App
                     Tag2 = captured
                 };
                 // Deferred: rebuilding here would dispose the swatch whose Click is still running.
+                // Deferred: rebuilding here would dispose the swatch whose Click is still running.
                 dot.Click += (s, e) => BeginInvoke(new Action(() =>
                 {
                     _colour = captured;
-                    foreach (Control c in new List<Control>(_swatches.Controls.Cast<Control>()))
-                    {
-                        _swatches.Controls.Remove(c);
-                        c.Dispose();
-                    }
-                    BuildSwatches();
+                    RebuildSwatches();
                 }));
                 _swatches.Controls.Add(dot);
                 x += 56;
+            }
+        }
+
+        private string PictureLabel()
+        {
+            return string.IsNullOrEmpty(_image) ? "Use a picture…" : "Remove picture";
+        }
+
+        /// <summary>
+        /// Chrome lets a profile carry an avatar, and a face is easier to tell apart at a
+        /// glance than a colour. The file is referenced, never copied — it stays where the user
+        /// keeps it, and Twinstall's folder holds nothing it did not create.
+        /// </summary>
+        private void ChoosePicture()
+        {
+            if (!string.IsNullOrEmpty(_image))
+            {
+                _image = null;
+                _picture.Text = PictureLabel();
+                RebuildSwatches();
+                return;
+            }
+
+            using (var dlg = new OpenFileDialog
+            {
+                Title = "Choose a picture for this account",
+                Filter = "Pictures (*.png;*.jpg;*.jpeg;*.bmp;*.ico)|*.png;*.jpg;*.jpeg;*.bmp;*.ico"
+            })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                _image = dlg.FileName;
+                _picture.Text = PictureLabel();
+                RebuildSwatches();
             }
         }
 
@@ -285,7 +353,8 @@ namespace Twinstall.App
                 Name = _name.Text.Trim(),
                 DataDir = PathUtil.Normalise(_folder.Text),
                 Colour = _colour,
-                Badge = _badge.Checked
+                Badge = _badge.Checked,
+                Image = _image
             };
             DialogResult = DialogResult.OK;
             Close();

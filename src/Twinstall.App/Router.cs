@@ -193,7 +193,11 @@ namespace Twinstall.App
                     if (!inst.Badge) continue;
                     try
                     {
-                        IconBadger.Compose(logo, AppPaths.IconFor(inst.Name), inst.Colour, inst.Name);
+                        // The picture stays where the user put it and is only read; nothing is
+                        // copied into Twinstall's folder. If it has since been moved or
+                        // deleted, fall back to the colour rather than failing the whole setup.
+                        using (System.Drawing.Image avatar = LoadAvatar(inst.Image))
+                            IconBadger.Compose(logo, AppPaths.IconFor(inst.Name), inst.Colour, inst.Name, avatar);
                         written++;
                     }
                     catch (Exception ex)
@@ -205,6 +209,15 @@ namespace Twinstall.App
                 }
             }
             return written;
+        }
+
+        private static System.Drawing.Image LoadAvatar(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return null;
+            try { return System.Drawing.Image.FromFile(path); }
+            catch (OutOfMemoryException) { Log.Write("not a usable picture: " + path); return null; }
+            catch (IOException ex) { Log.Write("could not read " + path + ": " + ex.Message); return null; }
+            catch (UnauthorizedAccessException ex) { Log.Write("could not read " + path + ": " + ex.Message); return null; }
         }
 
         // --------------------------------------------------------------- plumbing --

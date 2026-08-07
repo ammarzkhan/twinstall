@@ -8,6 +8,10 @@ static class Tests
 {
     static readonly string[] Crlf = { "\r\n" };
 
+    // Hoisted out of the calls that use them: CA1861 objects to constant array arguments.
+    static readonly string[] LegacyLine  = { "Work\tC:\\p\\work\t#059669\t1" };
+    static readonly string[] PictureLine = { "Work\tC:\\p\\work\t#059669\t1\tC:\\pics\\me.png" };
+
     static int passed, failed;
     static readonly List<string> failures = new List<string>();
 
@@ -289,6 +293,24 @@ static class Tests
         Eq(round.Instances[0].Colour, "#059669", "round trip keeps colour");
 
         Eq(InstanceConfig.Parse(null).Instances.Count, 0, "null input is safe");
+
+        // The picture column was added after people had config files. A line written by the
+        // older version has four fields, and must still load rather than being discarded.
+        AppConfig old = InstanceConfig.Parse(LegacyLine);
+        Eq(old.Instances.Count, 1, "a four-field line from an older version still parses");
+        Eq(old.Instances[0].Image, null, "no picture means no picture, not empty string");
+
+        AppConfig withPic = InstanceConfig.Parse(PictureLine);
+        Eq(withPic.Instances[0].Image, @"C:\pics\me.png", "a picture path is read");
+        Eq(InstanceConfig.Parse(
+             InstanceConfig.Serialise(withPic).Split(Crlf, StringSplitOptions.RemoveEmptyEntries))
+           .Instances[0].Image, @"C:\pics\me.png", "picture survives a round trip");
+
+        var noPic = new AppConfig();
+        noPic.Instances.Add(new Instance { Name = "A", DataDir = @"C:\p\a", Colour = "#111111", Badge = true });
+        Eq(InstanceConfig.Parse(
+             InstanceConfig.Serialise(noPic).Split(Crlf, StringSplitOptions.RemoveEmptyEntries))
+           .Instances[0].Image, null, "an empty picture column round-trips as null");
     }
 
     // --------------------------------------------------------- launch probe --

@@ -11,6 +11,14 @@ namespace Twinstall.Core
         public string DataDir { get; set; }
         public string Colour { get; set; }
         public bool Badge { get; set; }
+
+        /// <summary>
+        /// Optional picture to use as the badge instead of a coloured disc with a letter, the
+        /// way Chrome lets a profile carry an avatar. Empty means use <see cref="Colour"/>.
+        /// A path, not the image itself: the file stays where the user put it, and nothing
+        /// third-party is copied into Twinstall's own folder.
+        /// </summary>
+        public string Image { get; set; }
     }
 
     public sealed class AppConfig
@@ -54,12 +62,15 @@ namespace Twinstall.Core
                     case "SCHEME":  cfg.Scheme = p[1]; break;
                     case "DEFAULT": cfg.DefaultDataDir = PathUtil.Normalise(p[1]); break;
                     default:
+                        // Fields are read defensively by index so a file written by an older
+                        // version — which had no picture column — still loads unchanged.
                         cfg.Instances.Add(new Instance
                         {
                             Name    = p[0],
                             DataDir = PathUtil.Normalise(p[1]),
                             Colour  = p.Length > 2 ? p[2] : "#7C3AED",
-                            Badge   = p.Length > 3 && p[3] == "1"
+                            Badge   = p.Length > 3 && p[3] == "1",
+                            Image   = p.Length > 4 && p[4].Length > 0 ? p[4] : null
                         });
                         break;
                 }
@@ -76,7 +87,8 @@ namespace Twinstall.Core
             if (!string.IsNullOrEmpty(cfg.DefaultDataDir)) sb.Append("DEFAULT\t").Append(cfg.DefaultDataDir).Append("\r\n");
             foreach (Instance i in cfg.Instances)
                 sb.Append(i.Name).Append('\t').Append(i.DataDir).Append('\t')
-                  .Append(i.Colour).Append('\t').Append(i.Badge ? "1" : "0").Append("\r\n");
+                  .Append(i.Colour).Append('\t').Append(i.Badge ? "1" : "0").Append('\t')
+                  .Append(i.Image ?? string.Empty).Append("\r\n");
             return sb.ToString();
         }
 

@@ -52,10 +52,19 @@ namespace Twinstall.Platform
         /// </summary>
         public static void Compose(Image source, string outputIcoPath, string hexColour, string label)
         {
+            Compose(source, outputIcoPath, hexColour, label, null);
+        }
+
+        /// <param name="avatar">
+        /// Optional picture to fill the badge with instead of a colour and a letter, the way a
+        /// Chrome profile carries an avatar. Cover-fitted and clipped to the circle.
+        /// </param>
+        public static void Compose(Image source, string outputIcoPath, string hexColour, string label, Image avatar)
+        {
             var frames = new List<Bitmap>();
             try
             {
-                foreach (int size in IconSizes) frames.Add(Render(source, size, hexColour, label));
+                foreach (int size in IconSizes) frames.Add(Render(source, size, hexColour, label, avatar));
                 WriteIco(frames, outputIcoPath);
             }
             finally
@@ -68,7 +77,7 @@ namespace Twinstall.Platform
         /// One frame, composed at its final size. All geometry is a fraction of that size, so
         /// the badge occupies the same proportion whether it is 16px or 256px.
         /// </summary>
-        private static Bitmap Render(Image source, int size, string hexColour, string label)
+        private static Bitmap Render(Image source, int size, string hexColour, string label, Image avatar)
         {
             var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
             using (var g = Graphics.FromImage(bmp))
@@ -79,45 +88,81 @@ namespace Twinstall.Platform
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
                 g.Clear(Color.Transparent);
 
-                // The disc is 66% of the icon and sits top-right. It is the only thing telling
-                // two windows of the same application apart, and a taskbar button is 16px — a
-                // tasteful corner dot there is a few pixels of nothing. Top-right also stays
-                // clear of the taskbar's own running-app underline along the bottom edge.
-                float d = size * 0.66f;
-                float inset = size * 0.16f;
-                float logo = size - inset;
-
+                // The application's logo is drawn at FULL size and the badge overlaps its
+                // top-right corner. The badge used to be given room by shrinking the logo,
+                // which threw away resolution to make space for something drawn on top of the
+                // space anyway — the logo looked soft for no gain. Overlapping costs nothing.
                 if (source != null)
-                    g.DrawImage(source, 0, inset, logo, logo);
+                    g.DrawImage(source, 0, 0, size, size);
 
-                float x = size - d - (size * 0.012f);
-                float y = size * 0.012f;
-                float halo = Math.Max(1f, size * 0.030f);
+                float ring = Math.Max(1f, size * 0.055f);
+                float d = size * 0.60f;
+                float x = size - d - (ring / 2f);      // the ring strokes centred on the edge,
+                float y = ring / 2f;                   // so half of it sits outside the circle
+                float cx = x + (d / 2f), cy = y + (d / 2f);
 
-                using (var white = new SolidBrush(Color.White))
-                using (var fill = new SolidBrush(ParseColour(hexColour)))
+                Color colour = ParseColour(hexColour);
+
+                if (avatar != null)
                 {
-                    // The white ring separates the disc from whatever the logo does underneath,
-                    // so the colour reads cleanly against dark and light artwork alike.
-                    g.FillEllipse(white, x - halo, y - halo, d + (halo * 2), d + (halo * 2));
-                    g.FillEllipse(fill, x, y, d, d);
-
-                    if (size >= SmallestWithLabel && !string.IsNullOrEmpty(label))
+                    // Cover-fit inside the circle: fill it completely, crop the overflow, never
+                    // distort. A squashed face is worse than a cropped one.
+                    using (var clip = new GraphicsPath())
                     {
-                        using (var font = new Font("Segoe UI", d * 0.62f, FontStyle.Bold, GraphicsUnit.Pixel))
-                        using (var fmt = new StringFormat
-                        {
-                            Alignment = StringAlignment.Center,
-                            LineAlignment = StringAlignment.Center
-                        })
-                        {
-                            g.DrawString(label.Substring(0, 1).ToUpperInvariant(), font, white,
-                                         new RectangleF(x, y + (size * 0.012f), d, d), fmt);
-                        }
+                        clip.AddEllipse(x, y, d, d);
+                        GraphicsState state = g.Save();
+                        g.SetClip(clip);
+
+                        float scale = Math.Max(d / avatar.Width, d / avatar.Height);
+                        float w = avatar.Width * scale, h = avatar.Height * scale;
+                        g.DrawImage(avatar, x + ((d - w) / 2f), y + ((d - h) / 2f), w, h);
+
+                        g.Restore(state);
                     }
                 }
+                else
+                {
+                    using (var fill = new SolidBrush(colour)) g.FillEllipse(fill, x, y, d, d);
+                    if (size >= SmallestWithLabel && !string.IsNullOrEmpty(label))
+                        DrawCentredGlyph(g, label.Substring(0, 1).ToUpperInvariant(), d, cx, cy);
+                }
+
+                // One stroked ellipse, not two filled ones. Filling a larger white circle and a
+                // smaller coloured circle over it leaves two independently anti-aliased edges
+                // meeting in the middle, which is what made the ring look ragged at desktop
+                // size. A single stroke has one edge on each side and stays smooth.
+                using (var pen = new Pen(Color.White, ring)) g.DrawEllipse(pen, x, y, d, d);
             }
             return bmp;
+        }
+
+        /// <summary>
+        /// Centres a letter on the disc by its ink, not its line box.
+        ///
+        /// StringFormat centring positions the font's full line box — ascent and descent
+        /// included, most of which a capital letter does not occupy — so the glyph sits
+        /// visibly high inside a circle. Measuring the outline's actual bounds and centring
+        /// those puts it where the eye expects.
+        /// </summary>
+        private static void DrawCentredGlyph(Graphics g, string glyph, float diameter, float cx, float cy)
+        {
+            using (var family = new FontFamily("Segoe UI"))
+            using (var path = new GraphicsPath())
+            {
+                path.AddString(glyph, family, (int)FontStyle.Bold, diameter * 0.58f,
+                               PointF.Empty, StringFormat.GenericTypographic);
+
+                RectangleF b = path.GetBounds();
+                if (b.Width <= 0 || b.Height <= 0) return;
+
+                using (var move = new Matrix())
+                {
+                    move.Translate(cx - (b.X + (b.Width / 2f)), cy - (b.Y + (b.Height / 2f)));
+                    path.Transform(move);
+                }
+
+                using (var white = new SolidBrush(Color.White)) g.FillPath(white, path);
+            }
         }
 
         private static Color ParseColour(string hex)
