@@ -76,9 +76,44 @@ attributes and open handles were all normal, which is what pointed at disinfecti
 
 ### Signing
 
-Releases are unsigned. An Authenticode certificate is the actual fix for SmartScreen warnings and
-for reputation-based detection; until there is one, published SHA-256 hashes and buildable source
-are the honest substitute. See [SECURITY.md](../SECURITY.md).
+Releases are currently unsigned, and that is the single biggest obstacle to a non-technical
+person installing this: every download shows *"Windows protected your PC"*.
+
+**A `.pfx` file in a CI secret is no longer possible.** Since June 2023 the CA/Browser Forum has
+required the private key of every publicly-trusted code-signing certificate to live on
+FIPS-140-2 Level 2 hardware — an HSM, a USB token, or a cloud signing service. Any guide that
+tells you to base64 a `.pfx` into a secret predates that and cannot be followed today.
+
+That leaves three realistic routes:
+
+| Route | Cost | Hardware | CI |
+|---|---|---|---|
+| **SignPath Foundation** | free for OSS | none | official GitHub Action |
+| **Azure Trusted Signing** | ~$10/month | none | official GitHub Action |
+| OV certificate + token | ~$200–400/year | USB token | awkward; the token must be plugged into a machine |
+
+**SignPath Foundation is the natural fit here** — this is MIT-licensed open source built in
+public CI, which is exactly what the programme exists for. Azure Trusted Signing is the fallback
+if the project ever stops qualifying; note it validates identity and, for individuals, wants
+around three years of verifiable history.
+
+A self-signed certificate is **not** a route. It removes nothing: SmartScreen trusts a chain to a
+root Windows already trusts, and a self-signed one is not that. It only helps where you can
+install the certificate on every target machine yourself.
+
+**What signing does and does not fix:**
+
+- ✅ Removes "Unknown publisher" and shows a real name in the UAC/SmartScreen dialog
+- ⚠️ SmartScreen reputation still accrues per-certificate. An OV certificate may keep warning
+  until enough people download it; only EV certificates get instant reputation
+- ❌ Changes nothing about behavioural antivirus detection. Registering a protocol handler and
+  reading other processes' command lines look the same whoever signed the binary
+
+The workflow already has the step, skipped behind the `SIGNING_ENABLED` repository variable.
+**One ordering detail is easy to get wrong:** signing rewrites the executable, so any checksum
+taken before it is invalid. `publish.ps1` writes `SHA256SUMS.txt` at the end of its own run —
+which is *before* signing — so CI regenerates it afterwards. A published checksum that doesn't
+match the download is worse than none: it tells a careful user the file was tampered with.
 
 ## Verification status
 

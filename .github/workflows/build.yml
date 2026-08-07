@@ -20,9 +20,9 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
 
@@ -92,7 +92,51 @@ jobs:
         shell: pwsh
         run: pwsh -File scripts/publish.ps1
 
-      - uses: actions/upload-artifact@v4
+      # ---------------------------------------------------------------------
+      # Code signing. Skipped entirely until a certificate exists, so the build
+      # stays green without one — set the repository variable SIGNING_ENABLED to
+      # 'true' once the secrets below are configured.
+      #
+      # Azure Trusted Signing is the assumed provider: it needs no hardware
+      # token, which matters because every publicly-trusted code-signing
+      # certificate has required the private key to live on FIPS-140-2 hardware
+      # since June 2023. A .pfx in a secret is no longer a thing that exists.
+      # SignPath Foundation is the free-for-open-source alternative and would
+      # replace this step wholesale.
+      #
+      # UNTESTED until a certificate is in place. Read it before trusting it.
+      # ---------------------------------------------------------------------
+      - name: Sign executables
+        if: vars.SIGNING_ENABLED == 'true'
+        uses: azure/trusted-signing-action@v0
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_CLIENT_SECRET }}
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          trusted-signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\artifacts
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      # Signing rewrites the executables, so any hash taken before it is wrong.
+      # publish.ps1 writes SHA256SUMS.txt at the end of its own run, which is
+      # before this point — so it is regenerated here rather than published
+      # stale. A checksum file that does not match the download is worse than
+      # none at all: it tells a careful user the file was tampered with.
+      - name: Re-checksum after signing
+        if: vars.SIGNING_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          Get-ChildItem artifacts -Filter *.exe | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Set-Content artifacts/SHA256SUMS.txt -Encoding ascii
+          Get-Content artifacts/SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v7
         with:
           name: twinstall-artifacts
           path: |
@@ -110,9 +154,9 @@ jobs:
   core-portability:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '8.0.x'
 
@@ -137,9 +181,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: twinstall-artifacts
           path: artifacts
