@@ -19,12 +19,15 @@ namespace Twinstall.App
         private readonly FlatButton _ok = new FlatButton("Save", ButtonKind.Primary);
 
         private readonly string _profileRoot;
-        private readonly string _existingProfile;
+        private readonly List<string> _otherProfiles;
+        private readonly bool _isNew;
         private string _colour;
 
         internal Instance Value { get; private set; }
 
-        /// <summary>Chrome's profile palette, which is where this visual language comes from.</summary>
+        /// <summary>Set when the user chose to remove this account rather than save it.</summary>
+        internal bool RemoveRequested { get; private set; }
+
         /// <summary>
         /// Chrome's profile palette, which is where this visual language comes from.
         ///
@@ -39,10 +42,21 @@ namespace Twinstall.App
 
         private static int _nextColour = 1;
 
-        internal InstanceDialog(Instance existing, string profileRoot, string existingProfileDir)
+        /// <param name="otherProfileDirs">
+        /// The folders of the *other* accounts — never this one's. Passing the account being
+        /// edited compares it against itself, which reads as "both instances resolve to the
+        /// same folder" and disables Save on a perfectly valid account. That is exactly what
+        /// happened when a single "existing profile" path was passed instead of a list.
+        /// </param>
+        internal InstanceDialog(Instance existing, string profileRoot, IEnumerable<string> otherProfileDirs)
         {
             _profileRoot = profileRoot;
-            _existingProfile = existingProfileDir;
+            _isNew = existing == null;
+            _otherProfiles = new List<string>();
+            if (otherProfileDirs != null)
+                foreach (string d in otherProfileDirs)
+                    if (!string.IsNullOrWhiteSpace(d)) _otherProfiles.Add(d);
+
             _colour = existing?.Colour ?? Palette[_nextColour++ % Palette.Length];
 
             Text = existing == null ? "Add an account" : "Edit account";
@@ -115,6 +129,19 @@ namespace Twinstall.App
             };
             cancel.Click += (s, e) => { DialogResult = DialogResult.Cancel; Close(); };
             Add(cancel);
+
+            // Removal lives here rather than as a "remove the last one" button on the list,
+            // which only ever let you delete the account you happened to add most recently.
+            if (!_isNew)
+            {
+                var remove = new FlatButton("Remove account", ButtonKind.Danger)
+                {
+                    Location = new Point(24, 286),
+                    Size = new Size(160, 36)
+                };
+                remove.Click += (s, e) => RequestRemoval(existing);
+                Add(remove);
+            }
 
             // FlatButton is a Control, not an IButtonControl, so Esc and Enter have to be
             // wired by hand rather than through AcceptButton/CancelButton.
@@ -191,7 +218,9 @@ namespace Twinstall.App
 
         private void SuggestFolder()
         {
-            if (string.IsNullOrWhiteSpace(_profileRoot)) return;
+            // Only ever for a new account. Renaming an existing one must not silently move its
+            // profile folder out from under a signed-in session.
+            if (!_isNew || string.IsNullOrWhiteSpace(_profileRoot)) return;
             string suggestion = PathUtil.Join(_profileRoot, AppPaths.Sanitise(_name.Text));
             if (string.IsNullOrWhiteSpace(_folder.Text)
                 || _folder.Text.StartsWith(_profileRoot, StringComparison.OrdinalIgnoreCase))
@@ -218,9 +247,9 @@ namespace Twinstall.App
             if (string.IsNullOrWhiteSpace(_name.Text)) return "Give this account a name.";
             if (string.IsNullOrWhiteSpace(_folder.Text)) return "Choose a profile folder.";
 
-            if (!string.IsNullOrWhiteSpace(_existingProfile))
+            foreach (string other in _otherProfiles)
             {
-                var issues = IsolationCheck.Validate(_existingProfile, _folder.Text);
+                var issues = IsolationCheck.Validate(other, _folder.Text);
                 if (issues.Count > 0) return "This would not be kept separate: " + issues[0] + ".";
             }
             return null;
@@ -231,6 +260,20 @@ namespace Twinstall.App
             string problem = Problem();
             _warning.Text = problem ?? string.Empty;
             _ok.Enabled = problem == null;
+        }
+
+        private void RequestRemoval(Instance existing)
+        {
+            if (!Ui.Confirm("Remove the “" + (existing?.Name ?? _name.Text) + "” account from Twinstall?\r\n\r\n"
+                          + "Its shortcut and badged icon go away.\r\n\r\n"
+                          + "The profile folder stays where it is, still signed in:\r\n"
+                          + (existing?.DataDir ?? _folder.Text) + "\r\n\r\n"
+                          + "Delete that yourself if you want the account gone for good."))
+                return;
+
+            RemoveRequested = true;
+            DialogResult = DialogResult.OK;
+            Close();
         }
 
         private void Accept()

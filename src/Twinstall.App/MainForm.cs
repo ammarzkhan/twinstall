@@ -542,29 +542,14 @@ namespace Twinstall.App
             add.Click += (s, e) => AddInstance();
             _content.Controls.Add(add);
 
-            if (_config.Instances.Count > 1)
-            {
-                var del = new FlatButton("Remove last", ButtonKind.Subtle)
-                {
-                    Location = new Point(180, y + 6),
-                    Size = new Size(130, 40)
-                };
-                del.Click += (s, e) =>
-                {
-                    _config.Instances.RemoveAt(_config.Instances.Count - 1);
-                    ShowLater(Step.Accounts);
-                };
-                _content.Controls.Add(del);
-            }
-
             Say(_config.Instances.Count < 2
                 ? "Add a second account — that is the point of Twinstall."
-                : "Click an account to rename it or change its colour.");
+                : "Click an account to rename it, recolour it, or remove it.");
         }
 
         private void AddInstance()
         {
-            using (var dlg = new InstanceDialog(null, _detection?.ProfileRoot, ExistingProfileDir()))
+            using (var dlg = new InstanceDialog(null, _detection?.ProfileRoot, OtherProfileDirs(null)))
             {
                 if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
                 if (!EnsureIsolated(dlg.Value, null)) return;
@@ -578,18 +563,36 @@ namespace Twinstall.App
             int index = _config.Instances.IndexOf(existing);
             if (index < 0) return;
 
-            using (var dlg = new InstanceDialog(existing, _detection?.ProfileRoot, ExistingProfileDir()))
+            using (var dlg = new InstanceDialog(existing, _detection?.ProfileRoot, OtherProfileDirs(existing)))
             {
-                if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
-                if (!EnsureIsolated(dlg.Value, existing)) return;
-                _config.Instances[index] = dlg.Value;
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+                if (dlg.RemoveRequested)
+                {
+                    _config.Instances.RemoveAt(index);
+                    Log.Write("removed account " + existing.Name);
+                }
+                else
+                {
+                    if (dlg.Value == null) return;
+                    if (!EnsureIsolated(dlg.Value, existing)) return;
+                    _config.Instances[index] = dlg.Value;
+                }
             }
             Show(Step.Accounts);
         }
 
-        private string ExistingProfileDir()
+        /// <summary>
+        /// Every configured folder except the one being edited. Editing an account has to
+        /// exclude itself, or the isolation check compares it against its own folder, decides
+        /// the two are not separate, and refuses to save a perfectly valid account.
+        /// </summary>
+        private List<string> OtherProfileDirs(Instance excluding)
         {
-            return _config.Instances.Count > 0 ? _config.Instances[0].DataDir : _config.DefaultDataDir;
+            var dirs = new List<string>();
+            foreach (Instance i in _config.Instances)
+                if (!ReferenceEquals(i, excluding)) dirs.Add(i.DataDir);
+            return dirs;
         }
 
         /// <summary>
