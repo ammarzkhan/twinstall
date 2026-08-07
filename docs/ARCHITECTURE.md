@@ -151,7 +151,7 @@ because `Path.GetFullPath` silently turns a malformed config value into a real p
 unexpected, directly underneath an isolation check.
 
 **Testing without a framework.** `Twinstall.Tests` is a console app whose exit code is the
-result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 134 assertions
+result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 148 assertions
 across path handling, package-name derivation, command-line parsing, Chromium detection, stub
 resolution, isolation, config round-tripping, route selection, profile discovery, scheme matching
 and the launch probe. The regressions worth keeping are named after the bugs they'd catch:

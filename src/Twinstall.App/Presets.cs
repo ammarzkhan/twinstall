@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using Twinstall.Core;
+using Twinstall.Platform;
 
 namespace Twinstall.App
 {
@@ -91,6 +92,56 @@ namespace Twinstall.App
             return null;
         }
 
+        /// <summary>
+        /// Traces a hint step by step and reports why it produced what it did. Diagnostic
+        /// only, and deliberately verbose: "not found" on its own is useless when the cause
+        /// could be an environment variable, a permission, or a parsing slip.
+        /// </summary>
+        internal static IList<string> DescribeHint(string hint)
+        {
+            var report = new List<string>();
+            if (string.IsNullOrWhiteSpace(hint)) { report.Add("(empty hint)"); return report; }
+
+            string expanded;
+            try { expanded = Environment.ExpandEnvironmentVariables(hint); }
+            catch (ArgumentException ex) { report.Add("expand failed: " + ex.Message); return report; }
+            report.Add("expanded=" + expanded);
+
+            int star = expanded.IndexOf('*', StringComparison.Ordinal);
+            if (star < 0)
+            {
+                report.Add("no wildcard; Directory.Exists=" + Directory.Exists(expanded));
+                return report;
+            }
+
+            int before = expanded.LastIndexOf('\\', star);
+            int after = expanded.IndexOf('\\', star);
+            if (before < 0) { report.Add("no separator before the wildcard"); return report; }
+
+            string parent = expanded.Substring(0, before);
+            string pattern = after < 0 ? expanded.Substring(before + 1)
+                                       : expanded.Substring(before + 1, after - before - 1);
+            string tail = after < 0 ? string.Empty : expanded.Substring(after + 1);
+
+            report.Add("parent=[" + parent + "] pattern=[" + pattern + "] tail=[" + tail + "]");
+            report.Add("Directory.Exists(parent)=" + Directory.Exists(parent));
+
+            try
+            {
+                string[] matches = Directory.GetDirectories(parent, pattern);
+                report.Add("GetDirectories -> " + matches.Length.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture));
+                foreach (string m in matches) report.Add("  match=" + m);
+            }
+            catch (Exception ex)
+            {
+                // Diagnostic: any failure is worth reporting, so the catch is intentionally
+                // wide. This is the only place in the codebase where that is the right call.
+                report.Add("GetDirectories THREW " + ex.GetType().Name + ": " + ex.Message);
+            }
+            return report;
+        }
+
         private static List<string> ExpandHint(string hint)
         {
             var results = new List<string>();
@@ -119,9 +170,23 @@ namespace Twinstall.App
             string tail = after < 0 ? string.Empty : expanded.Substring(after + 1);
 
             string[] matches;
-            try { matches = Directory.Exists(parent) ? Directory.GetDirectories(parent, pattern) : Array.Empty<string>(); }
+            try
+            {
+                matches = Directory.Exists(parent) ? Directory.GetDirectories(parent, pattern) : Array.Empty<string>();
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // C:\Program Files\WindowsApps grants traverse but not read, so a normal
+                // application cannot enumerate it — Directory.Exists says true and
+                // GetDirectories throws. Every Store app landed here and silently resolved to
+                // nothing. PackageIndex reads the install paths out of HKCU instead and
+                // confirms them by traversal, which is permitted.
+                var viaIndex = new List<string>();
+                foreach (string root in PackageIndex.PackageRootsMatching(pattern))
+                    viaIndex.Add(tail.Length == 0 ? root : Path.Combine(root, tail));
+                return viaIndex;
+            }
             catch (IOException) { return results; }
-            catch (UnauthorizedAccessException) { return results; }
 
             Array.Sort(matches, (a, b) =>
                 LauncherStub.CompareVersionFolders(Path.GetFileName(b), Path.GetFileName(a)));

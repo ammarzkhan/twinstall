@@ -45,6 +45,28 @@ namespace Twinstall.App
                         return written > 0 ? 0 : 1;
                     }
 
+                    // Why didn't it find my app? Answers that without guesswork: shows every
+                    // preset, every hint, what each hint expands to, and whether the
+                    // executable was found there.
+                    if (string.Equals(first, "--presets", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Log.Write("--- preset diagnostic ---");
+                        System.Collections.Generic.IList<Preset> all = Presets.Load();
+                        Log.Write("apps.json base directory: " + AppContext.BaseDirectory);
+                        Log.Write("presets loaded: " + all.Count.ToString(CultureInfo.InvariantCulture));
+                        foreach (Preset p in all)
+                        {
+                            string found = Presets.FindInstalled(p);
+                            Log.Write("  " + p.DisplayName + "  exeName=" + (p.ExeName ?? "(null)")
+                                      + "  hints=" + p.Hints.Count.ToString(CultureInfo.InvariantCulture)
+                                      + "  -> " + (found ?? "NOT FOUND"));
+                            foreach (string h in p.Hints)
+                                Log.Write("      hint: " + h + "  =>  "
+                                          + string.Join(" ; ", Presets.DescribeHint(h)));
+                        }
+                        return 0;
+                    }
+
                     if (string.Equals(first, "--version", StringComparison.OrdinalIgnoreCase))
                     {
                         Ui.Info("Twinstall " + typeof(Program).Assembly.GetName().Version);

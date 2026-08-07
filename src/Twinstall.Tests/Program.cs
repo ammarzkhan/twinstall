@@ -101,6 +101,30 @@ static class Tests
         Eq(PackagePaths.ProfileRoot(plain, @"C:\Users\a\AppData\Local", @"C:\Users\a\AppData\Roaming"),
            @"C:\Users\a\AppData\Roaming",
            "unpackaged profile root is roaming appdata");
+
+        // A normal application cannot LIST C:\Program Files\WindowsApps - the ACL grants
+        // traverse but not read, so GetDirectories throws while Directory.Exists says true.
+        // Every Store app therefore failed preset lookup, silently. MrtCache under HKCU
+        // records the install paths instead; these decode its key names.
+        Eq(PackagePaths.DecodeMrtCacheKey(
+             @"C:%5CProgram Files%5CWindowsApps%5CClaude_1.25927.0.0_x64__pzs8sxrjxfjjc%5Cresources.pri"),
+           @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc\resources.pri",
+           "MrtCache key decodes to a path");
+        Eq(PackagePaths.PackageRoot(PackagePaths.DecodeMrtCacheKey(
+             @"C:%5CProgram Files%5CWindowsApps%5CClaude_1.25927.0.0_x64__pzs8sxrjxfjjc%5Cresources.pri")),
+           @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc",
+           "decoded key yields the package root");
+        Eq(PackagePaths.DecodeMrtCacheKey(null), null, "null MrtCache key is safe");
+
+        Check(PackagePaths.MatchesPattern("Claude_1.25927.0.0_x64__pzs8sxrjxfjjc", "Claude_*"),
+              "package full name matches its family pattern");
+        Check(!PackagePaths.MatchesPattern("ClaudeOther_1.0_x64__abc", "Claude_*"),
+              "a different package is not matched");
+        Check(PackagePaths.MatchesPattern("app-4.51.180", "app-*"), "version folder matches");
+        Check(PackagePaths.MatchesPattern("exact", "exact"), "a pattern with no star is an equality test");
+        Check(!PackagePaths.MatchesPattern("exact", "other"), "non-matching literal rejected");
+        Check(PackagePaths.MatchesPattern("prefix-middle-suffix", "prefix-*-suffix"), "star in the middle");
+        Check(!PackagePaths.MatchesPattern("ab", "abc*"), "shorter than the prefix cannot match");
     }
 
     // -------------------------------------------------------------- chromium --

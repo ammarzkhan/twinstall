@@ -88,13 +88,16 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **134 assertions, all passing** | **yes — suite executed** |
-| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 134  failed: 0`** |
-| `Twinstall.Platform` (7 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **probe/profile/scheme yes; window and icon no** |
+| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **148 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 148  failed: 0`** |
+| `Twinstall.Platform` (8 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **yes — every adapter has run** |
+| `Twinstall.App` (10 files) | real Windows | **yes, clean** | driven through Core | **yes — routes, launches, badges, UI opens** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
 
-The first three rows changed on 7 August 2026, when the suite was first run on a real Windows
-machine rather than inferred. Nothing in `Twinstall.Platform` has still ever *executed*.
+All of this changed on 7 August 2026, when the code was first run on a real Windows machine
+rather than inferred. Nothing is left in the "compiles but has never executed" category — but
+note what that does and does not mean: the adapters have been exercised, not soak-tested, and
+the UI has been driven by hand rather than by an automated harness.
 
 ### What the analysers actually said
 
@@ -135,11 +138,11 @@ The stricter pass was not free of findings, though. Two were worth fixing:
 | CA5392 ×7 | every P/Invoke in `NativeMethods` | no `DefaultDllImportSearchPaths`, so the loader searches the application directory before System32. A `user32.dll` dropped beside the exe would win. This exe is registered as a protocol handler and launched by Windows on a URL, which is not a shape where that should be left open |
 | CA1307 | `ProcessMap`, `Replace` building the WMI query | culture-sensitive string comparison — same family as the CA1305 above |
 
-Nine warnings remain at `latest-all` and are all deliberate: `CA1002` on the get-only
-`AppConfig.Instances`, `CA1031` seven times where the documented behaviour is to degrade rather
+Ten warnings remain at `latest-all` and are all deliberate: `CA1002` on the get-only
+`AppConfig.Instances`, `CA1031` eight times where the documented behaviour is to degrade rather
 than throw, `CA1303` on the test runner's own console output. Two of those `CA1031`s guard a
 caller-supplied delegate, where narrowing the catch would mean guessing what someone else's
-lambda throws. CI fails if the count rises above nine.
+lambda throws. CI fails if the count rises above ten.
 
 `Twinstall.App` also suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` in that project alone,
 with reasons in its `.csproj`. Those are WinForms ownership false positives — a `Form` disposes

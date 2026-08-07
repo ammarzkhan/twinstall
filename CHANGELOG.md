@@ -4,7 +4,30 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **Preset lookup failed for every Microsoft Store app.** A normal application cannot *list*
+  `C:\Program Files\WindowsApps` — the ACL grants traverse but not read, so `Directory.Exists`
+  returns true while `Directory.GetDirectories` throws `UnauthorizedAccessException`. The
+  exception was being swallowed, so choosing "Claude" simply filled in nothing. Slack, under
+  `%LOCALAPPDATA%`, worked fine, which is what made the failure look arbitrary.
+
+  Install paths are now read from `MrtCache` under HKCU, which is readable without elevation,
+  and each candidate is confirmed against disk because that key remembers uninstalled versions.
+
+  Worth recording: an interactive shell *can* list `WindowsApps`, so testing from a terminal
+  never reproduced this. Neither elevation nor process bitness was the cause — both were
+  checked and ruled out. Only running from the application's own process showed it.
+
+- **The UI failed silently.** A preset that resolved to nothing, "Check this app" with no
+  application chosen, and "Add" before checking one all reported into a status label at the
+  bottom of the window, so they read as "nothing happens when I click". Anything the user has
+  to act on now says so in a dialog.
+
+### Added
+
+- `Twinstall.exe --presets` — traces every preset hint, what it expands to, and the actual
+  exception when it finds nothing. Answers "why didn't it find my app?" without guesswork.
 
 ## [0.3.0] — 2026-08-07
 

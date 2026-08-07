@@ -35,12 +35,12 @@ coloured badges on the taskbar icons.
 configures itself, and every adapter has now been executed against real applications. What
 remains unbuilt is packaging, not function.
 
-11 files of pure decision logic with 138 passing tests, 8 Win32 adapters, and one WinForms app.
+11 files of pure decision logic with 148 passing tests, 8 Win32 adapters, and one WinForms app.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ analysed clean, **138/138 tests passing** |
-| `src/Twinstall.Tests` | ✅ 138 assertions, console runner, exit code is the result |
+| `src/Twinstall.Core` | ✅ analysed clean, **148/148 tests passing** |
+| `src/Twinstall.Tests` | ✅ 148 assertions, console runner, exit code is the result |
 | `src/Twinstall.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
 | `src/Twinstall.App` | ✅ `Twinstall.exe` — router, launcher, icon watcher, management UI |
 | **Detection, all steps** | ✅ verified against Claude, Slack and VS Code |
@@ -101,7 +101,7 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 134   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 148   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
@@ -120,13 +120,13 @@ clean, because `AnalysisLevel` in `Directory.Build.props` re-derives the mode an
 dotnet build Twinstall.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
 ```
 
-That reports **9 warnings**, all deliberate and all commented at the source: `CA1002` on the
-get-only `AppConfig.Instances`, `CA1031` seven times where the documented behaviour is to degrade
+That reports **10 warnings**, all deliberate and all commented at the source: `CA1002` on the
+get-only `AppConfig.Instances`, `CA1031` eight times where the documented behaviour is to degrade
 rather than throw, and `CA1303` on the test runner's own console output. Two of the `CA1031`s
 wrap a **caller-supplied delegate** (`listSubdirectories` in `ChromiumDetector` and
 `LauncherStub`), where catching anything narrower would be guessing at what someone else's
 lambda throws; an unreadable folder must count as a miss, not a crash. CI fails if the count
-goes above 9.
+goes above 10.
 
 `Twinstall.App` additionally suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` **in that
 project only**, with the reasoning in its `.csproj`. They are WinForms ownership false positives
@@ -147,6 +147,42 @@ from the full name by taking the **first and last** underscore-delimited segment
 **Store-installed exes CAN be launched with arguments.** An early theory said `WindowsApps` ACLs
 prevented passing `--user-data-dir` to a Store build. That is **wrong** — a plain `.cmd` doing
 exactly that works. Don't build a portable-copy workaround for a problem that doesn't exist.
+
+**But a normal app CANNOT list `C:\Program Files\WindowsApps`.** Traverse is granted, read is
+not. So:
+
+```
+Directory.Exists(@"C:\Program Files\WindowsApps")            -> true
+Directory.GetDirectories(@"C:\Program Files\WindowsApps",…)  -> UnauthorizedAccessException
+File.Exists(@"C:\Program Files\WindowsApps\<FullName>\app\x.exe") -> true
+```
+
+A known path inside it opens fine; the enumeration that would have *found* that path does not.
+Every Store app therefore failed preset lookup while Slack (under `%LOCALAPPDATA%`) worked.
+
+**The trap: an interactive shell can list it, so testing from a terminal never reproduces this.**
+Not elevation and not bitness — both were checked and ruled out. The bug only appears from a
+plain GUI process. **Confirm filesystem permissions from the application's own process**, which
+is what `Twinstall.exe --presets` is for: it traces every hint and prints the actual exception
+instead of a silent "not found".
+
+**`MrtCache` is the way in.** `HKCU\Software\Classes\Local Settings\MrtCache` is readable without
+elevation and records the full path of every package whose resources have loaded, backslashes
+escaped as `%5C`:
+
+```
+C:%5CProgram Files%5CWindowsApps%5CClaude_1.25927.0.0_x64__pzs8sxrjxfjjc%5Cresources.pri
+```
+
+It keeps **stale versions** — nine for Claude on the dev machine, of which one existed — so every
+candidate must be confirmed against disk. Traversal is permitted, so that check works.
+`PackageIndex.InstalledPackageRoots` does this; `PackagePaths.DecodeMrtCacheKey` and
+`MatchesPattern` are the tested pure parts.
+
+**A failure the user can't see is a bug, not a message.** The preset miss surfaced only in a
+status label at the bottom of the window, so pressing "Check this app" and "Add" looked like
+nothing happening at all. Anything the user must act on gets a dialog; the status bar is for
+progress, not for refusals.
 
 **Protocol registration: use `RegisteredApplications`, not `HKCU\Software\Classes`.** Writing the
 scheme key directly does not win against an MSIX app's declared protocol, and it's the part of

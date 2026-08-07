@@ -207,11 +207,18 @@ namespace Twinstall.App
             if (found != null)
             {
                 _exePath.Text = found;
-                Say("Found " + p.DisplayName + ". Now check it.");
+                Say("Found " + p.DisplayName + ". Now press \"Check this app\".");
+                return;
             }
-            else
+
+            // Failing quietly into the status bar is how this looked like "nothing happens
+            // when I click". If we cannot find the app, say so and offer the way forward.
+            Say(p.DisplayName + " was not found automatically.");
+            if (Ui.Confirm(p.DisplayName + " was not found in the usual places.\r\n\r\n"
+                         + "It may be installed somewhere unusual, or not installed at all.\r\n\r\n"
+                         + "Would you like to find its .exe yourself?"))
             {
-                Say(p.DisplayName + " was not found in the usual places — use Browse to point at it.");
+                Browse();
             }
         }
 
@@ -227,7 +234,21 @@ namespace Twinstall.App
         private async Task DetectAsync()
         {
             string exe = _exePath.Text.Trim().Trim('"');
-            if (!File.Exists(exe)) { Say("That file does not exist."); return; }
+
+            if (exe.Length == 0)
+            {
+                Say("No application chosen.");
+                Ui.Error("Choose an application first.\r\n\r\n"
+                       + "Pick one from the list, or use Browse to point at its .exe.");
+                return;
+            }
+            if (!File.Exists(exe))
+            {
+                Say("That file does not exist.");
+                Ui.Error("There is no file at:\r\n\r\n" + exe + "\r\n\r\n"
+                       + "Use Browse to point at the application's .exe.");
+                return;
+            }
 
             _detect.Enabled = false;
             _apply.Enabled = false;
@@ -344,7 +365,15 @@ namespace Twinstall.App
 
         private void AddInstance()
         {
-            if (string.IsNullOrWhiteSpace(_config.ExePath)) { Say("Check an application first."); return; }
+            if (string.IsNullOrWhiteSpace(_config.ExePath))
+            {
+                Say("Check an application first.");
+                Ui.Error("Check an application first.\r\n\r\n"
+                       + "Twinstall needs to know that the app really supports separate "
+                       + "profiles, and where it keeps them, before it can offer to add one. "
+                       + "Press \"Check this app\" in step 1.");
+                return;
+            }
 
             using (var dlg = new InstanceDialog(null, _detection?.ProfileRoot, ExistingProfileDir()))
             {
@@ -358,7 +387,11 @@ namespace Twinstall.App
         private void EditInstance()
         {
             int index = SelectedIndex();
-            if (index < 0) return;
+            if (index < 0)
+            {
+                Say("Select a row first.");
+                return;
+            }
 
             using (var dlg = new InstanceDialog(_config.Instances[index], _detection?.ProfileRoot, ExistingProfileDir()))
             {

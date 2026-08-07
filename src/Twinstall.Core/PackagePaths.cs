@@ -41,6 +41,50 @@ namespace Twinstall.Core
         }
 
         /// <summary>
+        /// Decodes a Windows MrtCache registry key name back into a path.
+        ///
+        /// Why this exists: **a normal application cannot list
+        /// `C:\Program Files\WindowsApps`.** The ACL grants traverse but not read, so
+        /// `Directory.GetDirectories` throws `UnauthorizedAccessException` there — which means
+        /// a packaged app's install folder cannot be *found* by enumeration, even though a
+        /// known path inside it can be opened perfectly well.
+        ///
+        /// MrtCache is the way out. It lives under HKCU, is readable without elevation, and
+        /// records the full path of every package whose resources have been loaded, with
+        /// backslashes escaped as %5C:
+        ///
+        ///   C:%5CProgram Files%5CWindowsApps%5CClaude_1.25927.0.0_x64__pzs8sxrjxfjjc%5Cresources.pri
+        ///
+        /// It lists historical versions too — nine for Claude on the development machine — so
+        /// callers must confirm each candidate still exists on disk. Traversal is permitted,
+        /// so that check works even though the enumeration that would have found it does not.
+        /// </summary>
+        public static string DecodeMrtCacheKey(string keyName)
+        {
+            if (string.IsNullOrWhiteSpace(keyName)) return null;
+            return keyName.Replace("%5C", "\\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Simple glob for a single '*', which is all package and version folder patterns
+        /// need ('Claude_*', 'app-*'). Not a general matcher, deliberately.
+        /// </summary>
+        public static bool MatchesPattern(string name, string pattern)
+        {
+            if (name == null || pattern == null) return false;
+
+            int star = pattern.IndexOf('*', StringComparison.Ordinal);
+            if (star < 0) return string.Equals(name, pattern, StringComparison.OrdinalIgnoreCase);
+
+            string prefix = pattern.Substring(0, star);
+            string suffix = pattern.Substring(star + 1);
+            if (name.Length < prefix.Length + suffix.Length) return false;
+
+            return name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// The package's own directory (…\WindowsApps\&lt;PackageFullName&gt;), or null when
         /// unpackaged. AppxManifest.xml sits directly inside it, and reading that file is how
         /// scheme discovery learns which protocols a package declares without needing WinRT.
