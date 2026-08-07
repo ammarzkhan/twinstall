@@ -37,7 +37,7 @@ namespace Twinstall.Platform
                         if (CommandLine.IsChildProcess(commandLine)) continue;
 
                         // Same file name is not the same application. Verified on a real
-                        // machine: the Claude Code CLI is claude.exe too, and without this it
+                        // machine: a separate command-line tool ships a claude.exe too, and without this it
                         // was being reported as a running desktop instance.
                         if (!CommandLine.RefersToApp(commandLine, cfg.ExePath)) continue;
 

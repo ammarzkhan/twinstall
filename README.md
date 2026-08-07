@@ -1,172 +1,215 @@
+<div align="center">
+
+<img src="docs/images/logo.png" width="96" alt="Twinstall">
+
 # Twinstall
 
-Run two accounts of the same desktop app side by side on Windows — and have the sign-in
+**Use two accounts of the same app at the same time on Windows** — and have the sign-in
 actually land on the one you meant.
 
-**Status: working, unsigned, not yet packaged.** Detection and routing have been run
-end-to-end on real installations of Claude (Microsoft Store), Slack and VS Code. It is not on
-the Microsoft Store and the binaries are not code-signed — please read
-[SECURITY.md](SECURITY.md) before you run it, and [docs/BUILDING.md](docs/BUILDING.md) for
-exactly what is and isn't proven.
+Slack · Discord · VS Code · Claude · Notion · Obsidian · Figma · and most other desktop apps
+
+</div>
 
 ---
 
-## The problem
+## Is this for you?
 
-Chromium-based desktop apps — Slack, Discord, VS Code, Signal, Claude — accept
-`--user-data-dir`, which gives you a completely separate profile. Two accounts side by side
-looks trivial. Two things break it:
+You have two accounts for the same app — work and personal, two clients, two organisations —
+and Windows only lets you be signed into one at a time. So you sign out, sign in, sign out
+again, all day.
 
-**Sign-in goes to the wrong window.** These apps authenticate through the system browser and
-come back via a custom URL scheme (`slack://`, `claude://`). Windows allows exactly one handler
-per scheme, and that handler launches the app with *no* `--user-data-dir` — which always resolves
-to the default profile. Your second account can therefore never receive a callback, no matter
-which window you started from. Closing the first instance doesn't help; the callback just opens
-a fresh copy of the first profile.
+Twinstall gives each account its own copy of the app, running side by side, with a coloured
+badge on each so you can tell them apart at a glance.
 
-**You can't tell the windows apart.** Same executable, same AppUserModelID, so Windows draws
-identical taskbar buttons and merges them into one.
+<div align="center">
+<img src="docs/images/05-badges.png" width="620" alt="Badged icons for several apps">
+</div>
 
-## What Twinstall does
-
-Takes over the URL scheme and dispatches deliberately — to the window you were last using, by
-Z-order, which survives the browser stealing focus — and puts a Chrome-style coloured badge on
-each taskbar icon so you can see which is which.
-
-No per-app configuration tables. Point it at an executable and it works out whether the app is
-Chromium-based, where its profile lives, which URL scheme it owns, and — by actually launching
-it once — whether it really honours separate profiles at all. See
-[docs/DETECTION.md](docs/DETECTION.md).
+**It also fixes the part that makes this hard.** Signing in opens your browser, and when the
+browser hands you back, Windows always returns you to the *first* copy — so the second account
+can never finish signing in. Twinstall catches that hand-off and sends it to the window you
+started from.
 
 ---
 
 ## Getting started
 
-### Install it
+### 1 — Download
 
-Download **one file** from [Releases](../../releases) and run it. It offers to install itself
-into `%LOCALAPPDATA%\Programs\Twinstall`, adds a Start-menu entry, and appears in
-Settings → Apps → Installed apps so it can be removed like anything else. No administrator
-prompt; nothing is written outside your own user profile.
+Grab **one file** from the [**Releases page**](../../releases):
 
-| File | Size | Needs |
+| Download this | Size | If |
 |---|---|---|
-| `Twinstall-<version>.exe` | ~0.6 MB | the [.NET 8 **Desktop** Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
-| `Twinstall-<version>-standalone.exe` | ~147 MB | nothing at all |
+| **`Twinstall-standalone.exe`** | ~147 MB | you want it to just work — **pick this one if unsure** |
+| `Twinstall.exe` | ~0.6 MB | you already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
 
-Take the small one unless you would rather not install a runtime. Both are a single file with
-everything inside — there is no folder to keep, and nothing to unpack.
+There is nothing to unzip. It is one file.
 
-Choosing **No** at the install prompt runs it where it stands, which is fine for trying it out.
-Bear in mind that shortcuts and the protocol handler record an absolute path, so a copy run from
-Downloads stops working the moment that folder is tidied up.
+### 2 — Run it
 
-Verify what you downloaded against `SHA256SUMS.txt`:
+Double-click it. Windows will probably say **"Windows protected your PC"** — this is expected,
+and it is not a sign that anything is wrong. It happens to every program that hasn't paid for a
+code-signing certificate yet, and Twinstall hasn't.
 
-```bash
-powershell -NoProfile -Command "Get-FileHash .\Twinstall-0.3.0.exe -Algorithm SHA256"
-```
+> Click **More info**, then **Run anyway**.
 
-The binaries are **unsigned**. [SECURITY.md](SECURITY.md) explains what that means, why
-antivirus software may object, and what we will never advise you to do about it.
+If you would rather not take that on trust, you can check the file against the published
+checksums or build it yourself — both are explained in [SECURITY.md](SECURITY.md).
 
-### Build it
+Twinstall then offers to install itself into your own user folder. Say yes. There is no
+administrator prompt and nothing is written outside your profile.
 
-Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). From the repository
-root:
+### 3 — Pick your app
 
-```bash
-dotnet build Twinstall.sln -c Release
-```
+<img src="docs/images/01-choose-app.png" width="560" alt="Choosing an app">
 
-Run the tests — the exit code is the result:
+It lists the apps it found on your PC. Click one, then **Check this app**.
 
-```bash
-dotnet run --project src/Twinstall.Tests -c Release --no-build
-```
+A window from that app will open and close by itself — that is Twinstall making sure the app
+really supports separate accounts, rather than promising something it can't deliver.
 
-Produce a self-contained folder you can copy to another machine, with no runtime to install:
+<img src="docs/images/02-check-result.png" width="560" alt="Check result">
 
-```bash
-dotnet publish src/Twinstall.App -c Release -r win-x64 --self-contained -o publish
-```
+### 4 — Add your second account
 
-### Set it up
+<img src="docs/images/03-accounts.png" width="560" alt="Naming accounts">
 
-Run `Twinstall.exe` with no arguments.
+Your existing account is already there. Click **Add an account**, give it a name like
+*Personal*, and pick a colour — or use your own photo, like Chrome profiles.
 
-1. **Pick the application.** Choose a preset or Browse to its `.exe`. Presets are convenience
-   only — an app that isn't listed works identically.
-2. **Press "Check this app".** This runs the full detection pass, ending with a launch test that
-   starts the app once against a throwaway profile to prove it honours `--user-data-dir`. A
-   window will appear and close again. If the app doesn't support profiles, Twinstall says so
-   and changes nothing.
-3. **Add a second instance.** Name it, pick a badge colour. Twinstall refuses profile folders
-   that are identical to, or nested inside, one another — that isolation is the entire basis for
-   claiming the accounts stay separate.
-4. **Press "Set up Twinstall".** It shows you everything it is about to change and waits for
-   you to agree.
-5. **Choose Twinstall in Settings.** Windows only lets *you* pick a default handler, so Settings
-   opens at the end. Find the scheme and select Twinstall.
+### 5 — Apply, and do the one step Windows insists on
 
-Then open your second account from its Start-menu shortcut.
+Twinstall shows you everything it is about to change, then does it.
 
-### Command line
+The very last step has to be you: **Windows does not allow any program to make itself the
+handler for sign-in links.** Twinstall opens the exact Settings page and shows you the two
+clicks to make.
 
-| Command | What it does |
-|---|---|
-| `Twinstall.exe` | management UI |
-| `Twinstall.exe <scheme>://...` | route a link — this is what Windows invokes |
-| `Twinstall.exe --launch "<name>"` | start one instance and badge it |
-| `Twinstall.exe --watch [seconds]` | keep badging taskbar icons; `0` runs until killed |
-| `Twinstall.exe --compose` | rebuild badged icons, e.g. after the target app updates |
+<img src="docs/images/04-last-step.png" width="560" alt="Final step">
 
-### Removing it
-
-"Remove Twinstall's changes" in the UI undoes the registry entries, shortcuts, icons and config.
-**Your profile folders are deliberately left alone** — they hold live sessions, and deleting
-them is your call. Everything Twinstall touches is listed in [SECURITY.md](SECURITY.md).
+That is it. Open your second account from the Start menu and sign in as normal.
 
 ---
 
-## Known limits
+## Everyday use
 
-- **Z-order routing is a heuristic.** Right when you start sign-in from the window you're in;
-  wrong if you alt-tab mid-flow. The router logs what it chose, every time.
-- **Per-window taskbar icons need "Combine taskbar buttons: Never."** That's a system-wide
-  Windows setting affecting every app, and it only takes effect after you sign out and back in.
-  Twinstall offers it as an explicit opt-in and never changes it silently.
-- **The binaries are unsigned**, and an unsigned protocol handler is a shape antivirus software
-  is right to look at closely. [SECURITY.md](SECURITY.md) explains exactly why, and what we will
-  never advise you to do about it.
-- **New Teams cannot be supported.** It is WebView2, not Electron, so it has no
-  `--user-data-dir`. Detection rejects it automatically rather than producing something broken.
-- **Not on the Microsoft Store.** Whether certification accepts an app that declares another
-  vendor's URL scheme is undocumented either way and still untested.
+- **Open an account** — Start menu, or the desktop shortcuts, one per account.
+- **Tell them apart** — each taskbar icon carries its account's colour.
+- **Sign in** — start it from the window you want it to land in, and don't click the other one
+  while your browser is working. That is the one rule.
 
-## Design notes
+### Removing it
 
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — how it works, why MSIX changes the shape of it,
-  and the repository layout
-- [DETECTION.md](docs/DETECTION.md) — the method for identifying a target app, and what
-  running it against real installs actually taught us
-- [BUILDING.md](docs/BUILDING.md) — build, test, and an honest verification status
-- [SECURITY.md](SECURITY.md) — what it touches, how callback URLs are handled, threat model
-- [STORE-SUBMISSION.md](docs/STORE-SUBMISSION.md) — Microsoft Store checklist
+**Settings → Apps → Installed apps → Twinstall → Uninstall**, like any other program.
 
-## Contributing
+Your accounts and everything you're signed into are **not** deleted. Twinstall shows you where
+those folders are so you can remove them yourself if you want to.
 
-Read [CLAUDE.md](CLAUDE.md) first. It records the decisions that look arbitrary but aren't, and
-the mistakes already made, so they don't get made again. Two rules matter most:
+---
 
-- `Twinstall.Core` targets `net8.0`, not `net8.0-windows`, so an OS call there fails to compile.
-  Decisions live there and are unit-tested; `Twinstall.Platform` only observes.
+## Questions people ask
+
+<details>
+<summary><b>Is my data safe? Does this see my passwords?</b></summary>
+
+No. Twinstall never sees your password, and it has **no network code at all** — it cannot send
+anything anywhere.
+
+When you sign in, your browser does that with the app's own servers exactly as it always has.
+Twinstall's only job is deciding *which window* the browser hands back to. Sign-in links are
+recorded in a local log with the sensitive part stripped out before it is ever written to disk.
+
+[SECURITY.md](SECURITY.md) explains all of it in detail.
+</details>
+
+<details>
+<summary><b>Why did my antivirus complain?</b></summary>
+
+Because Twinstall does several things that look, from the outside, like something suspicious:
+it handles sign-in links, it reads which programs are running, and it changes taskbar icons.
+Those are the product, but a scanner can only see the shape.
+
+We won't tell you to switch your antivirus off. [SECURITY.md](SECURITY.md) explains exactly
+what it does and what your sensible options are.
+</details>
+
+<details>
+<summary><b>Will this get me banned, or break the app?</b></summary>
+
+It doesn't modify the app. It starts the app's own official copy with a setting the app already
+supports — the same one Chrome uses for profiles. Each account keeps its own folder, and the app
+itself has no idea Twinstall exists.
+</details>
+
+<details>
+<summary><b>My app isn't in the list.</b></summary>
+
+Use **Choose another app…** and point it at the program's `.exe`. The list is only a shortcut —
+apps that aren't on it work exactly the same way. Twinstall checks any app you give it and tells
+you honestly if it won't work.
+</details>
+
+<details>
+<summary><b>Can I use three accounts? Four?</b></summary>
+
+Yes. Add as many as you like; each gets its own colour and shortcut.
+</details>
+
+<details>
+<summary><b>Does it start with Windows / slow my PC down?</b></summary>
+
+A small background task keeps the badges on your taskbar icons, because Windows and the apps
+themselves keep clearing them. It uses about **0.4% of one CPU core**. It's listed in Task
+Manager → Startup apps, where you can turn it off if you'd rather.
+</details>
+
+<details>
+<summary><b>What doesn't work?</b></summary>
+
+- **Sign-in routing is a good guess, not magic.** It sends the link to the window you used most
+  recently. Start the sign-in, then leave the other window alone until it finishes.
+- **Microsoft Teams (new)** can't be supported — it isn't built the way the others are.
+  Twinstall detects that and tells you rather than half-working.
+- **Some Microsoft Store apps** refuse to be started with settings at all. Twinstall says so
+  instead of blaming the app.
+</details>
+
+---
+
+## For developers
+
+Detection is fully automatic: point it at any executable and it works out whether the app is
+Chromium/Electron, where its profiles live, which URL scheme it owns, and — by actually running
+it once — whether it honours separate profiles at all. No per-app tables.
+
+```bash
+dotnet build Twinstall.sln -c Release
+dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
+pwsh -File scripts/publish.ps1                                   # single-file releases
+```
+
+| Document | What's in it |
+|---|---|
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | how it works, and the repository layout |
+| [DETECTION.md](docs/DETECTION.md) | the six-step method for identifying a target app |
+| [BUILDING.md](docs/BUILDING.md) | build, test, and an honest verification status |
+| [SECURITY.md](SECURITY.md) | what it touches, how sign-in links are handled, threat model |
+| [ENGINEERING.md](ENGINEERING.md) | the decisions that look arbitrary but aren't — **read before contributing** |
+
+Two rules matter most:
+
+- `Twinstall.Core` targets `net8.0`, not `net8.0-windows`, so an OS call there **fails to
+  compile**. Decisions live there and are unit-tested; `Twinstall.Platform` only observes.
 - Path matching is on exact normalised paths, never substrings. `work` and `work2` must stay
   distinct, and there's a regression test named after it.
 
+Contributions welcome — especially confirmations that a given app works, since the preset list
+marks entries as `measured` or `inferred` and most are still inferred.
+
 ## Licence
 
-[MIT](LICENSE).
+[MIT](LICENSE) — free to use, change and share.
 
 ## Trademarks
 
@@ -175,5 +218,4 @@ Discord, Microsoft, Signal, or any other application vendor. Product names are t
 their respective owners and are used only to describe compatibility.
 
 **No third-party artwork ships with Twinstall.** Badged icons are composed at run time from the
-copy of the application already installed on your machine. That is a deliberate decision, not an
-accident — see [LogoExtractor](src/Twinstall.Platform/LogoExtractor.cs).
+copy of the application already installed on your machine.

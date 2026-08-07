@@ -73,16 +73,16 @@ setting change. It stays, but behind an explicit toggle with a plain-language ex
 
 ---
 
-## The open risk I cannot resolve for you
+## The open risk
 
 **Will Store certification accept an app that declares other companies' URL schemes in its
 manifest?**
 
 Declaring `<uap:Protocol Name="slack" />` is mechanically supported and is the sanctioned
 alternative to registry hacking. But an app claiming another vendor's scheme may still draw a
-policy 11.2 or 10.1.1 objection, and I have found no published guidance either way.
+policy 11.2 or 10.1.1 objection, and there is no published guidance either way.
 
-**Do this before building the full product:** open a Partner Center support ticket describing
+**Do this before packaging:** open a Partner Center support ticket describing
 exactly this, or submit a minimal build declaring one scheme and see whether it certifies. A day
 of waiting is much cheaper than discovering it after the app is finished.
 
@@ -151,7 +151,7 @@ because `Path.GetFullPath` silently turns a malformed config value into a real p
 unexpected, directly underneath an isolation check.
 
 **Testing without a framework.** `Twinstall.Tests` is a console app whose exit code is the
-result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 150 assertions
+result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 155 assertions
 across path handling, package-name derivation, command-line parsing, Chromium detection, stub
 resolution, isolation, config round-tripping, route selection, profile discovery, scheme matching
 and the launch probe. The regressions worth keeping are named after the bugs they'd catch:

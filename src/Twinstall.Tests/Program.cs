@@ -72,7 +72,7 @@ static class Tests
         Check(CommandLine.IsChildProcess(@"App.exe --type=renderer"), "renderer detected");
         Check(!CommandLine.IsChildProcess(@"App.exe --user-data-dir=C:\p\x"), "main process not a child");
 
-        // Observed on a real machine: the Claude Code CLI is also called claude.exe, lives
+        // Observed on a real machine: a separate command-line tool is also called claude.exe, lives
         // elsewhere, and was being counted as a running desktop instance. That is enough to
         // turn "nothing running, ask" into "only one running" and route a sign-in nowhere.
         const string desktop = @"C:\Program Files\WindowsApps\Claude_1.0_x64__abc\app\claude.exe";
@@ -332,7 +332,7 @@ static class Tests
         Eq(LaunchProbe.Arguments(dir), "--user-data-dir=\"" + dir + "\"", "arguments are quoted");
         Eq(CommandLine.ExtractDataDir(LaunchProbe.Arguments(dir), @"C:\fallback"), dir,
            "arguments round-trip through ExtractDataDir");
-        const string spaced = @"C:\Users\Ammar Khan\AppData\Local\Temp\Twinstall\probe-x";
+        const string spaced = @"C:\Users\Alex Taylor\AppData\Local\Temp\Twinstall\probe-x";
         Eq(CommandLine.ExtractDataDir(LaunchProbe.Arguments(spaced), @"C:\fallback"), spaced,
            "a path containing spaces survives the round trip");
         Eq(LaunchProbe.Arguments(""), "", "no arguments without a directory");

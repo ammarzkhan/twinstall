@@ -42,13 +42,12 @@ mono /tmp/tests.exe
 pwsh -File scripts/publish.ps1
 ```
 
-Runs the tests first and refuses to publish if they fail, then writes two zips and a
-`SHA256SUMS.txt` into `artifacts/`:
+Runs the tests first and refuses to publish if they fail, then writes two single-file executables and a `SHA256SUMS.txt` into `artifacts/`:
 
 | Artifact | Size | Needs |
 |---|---|---|
-| `twinstall-<v>-win-x64.zip` | ~0.7 MB | .NET 8 **Desktop** Runtime on the target machine |
-| `twinstall-<v>-win-x64-standalone.zip` | ~160 MB | nothing |
+| `Twinstall-<v>.exe` | ~0.6 MB | .NET 8 **Desktop** Runtime on the target machine |
+| `Twinstall-<v>-standalone.exe` | ~147 MB | nothing |
 
 Prefer the small one where you can. It is not just smaller — a handful of ordinary managed DLLs
 beside a normal apphost is the least unusual thing you can hand an antivirus engine.
@@ -88,8 +87,8 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **150 assertions, all passing** | **yes — suite executed** |
-| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 150  failed: 0`** |
+| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **155 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 155  failed: 0`** |
 | `Twinstall.Platform` (8 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **yes — every adapter has run** |
 | `Twinstall.App` (10 files) | real Windows | **yes, clean** | driven through Core | **yes — routes, launches, badges, UI opens** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
@@ -173,7 +172,7 @@ resource reads, the registry sweep and the package-manifest read all behaved cor
 already-running instances were left untouched throughout.
 
 They earned their keep immediately, exposing five detection defects that the heuristics alone
-would have shipped — see CLAUDE.md's facts section. Timings, for reference when something later
+would have shipped — see ENGINEERING.md's facts section. Timings, for reference when something later
 feels slow: profile scan 12–25 ms, scheme scan 47–83 ms, launch probe 1.4–4.4 s.
 
 **Reproducing the stub analyser pass** is a temporary-project trick, not part of the build: a

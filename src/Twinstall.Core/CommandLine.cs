@@ -19,7 +19,7 @@ namespace Twinstall.Core
         /// rather than merely sharing its file name.
         ///
         /// Matching on the executable's name alone is not enough, and this was observed, not
-        /// theorised: the Claude Code CLI is also called claude.exe, lives somewhere else
+        /// theorised: a separate command-line tool is also called claude.exe, lives somewhere else
         /// entirely, and carries no --type= or --user-data-dir. A name-only match counted it
         /// as a running desktop instance, which is enough to turn a "nothing is running, ask
         /// the user" into a confident "only one is running" and route a sign-in to an instance

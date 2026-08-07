@@ -63,7 +63,7 @@
     <Product>Twinstall</Product>
     <AssemblyTitle>Twinstall</AssemblyTitle>
     <Description>Run a second, separately signed-in copy of a desktop app.</Description>
-    <Copyright>Copyright (c) 2026 Ammar Zaidi</Copyright>
+    <Copyright>Copyright (c) 2026 ammarzkhan</Copyright>
   </PropertyGroup>
 
   <ItemGroup>

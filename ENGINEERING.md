@@ -1,7 +1,11 @@
-# Twinstall — project context
+# Twinstall — engineering notes
 
-Read this before touching anything. It exists so you don't re-derive facts that were paid
-for once already, and don't undo decisions that look arbitrary but aren't.
+Read this before changing anything. It exists so nobody re-derives facts that were paid for
+once already, or undoes decisions that look arbitrary but aren't.
+
+Most of what follows was established by running code against real applications on a real
+machine, not by reading documentation — several entries record a theory that turned out to be
+wrong, and those are kept deliberately, because the wrong theory is usually the tempting one.
 
 ---
 
@@ -11,7 +15,7 @@ A Windows tool that lets someone run **two accounts of the same Chromium/Electro
 side by side** — Slack, Discord, VS Code, Signal, Claude — and have browser sign-in callbacks
 land on the window they actually meant.
 
-Two problems, both real, both solved in the reference implementation:
+Two problems, both real, both solved here:
 
 1. **The sign-in callback goes to the wrong instance.** These apps authenticate through the
    system browser and return via a custom URL scheme (`slack://`, `claude://`). Windows allows
@@ -35,16 +39,16 @@ coloured badges on the taskbar icons.
 configures itself, and every adapter has now been executed against real applications. What
 remains unbuilt is packaging, not function.
 
-11 files of pure decision logic with 150 passing tests, 8 Win32 adapters, and one WinForms app.
+11 files of pure decision logic with 155 passing tests, 8 Win32 adapters, and one WinForms app.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ analysed clean, **150/150 tests passing** |
-| `src/Twinstall.Tests` | ✅ 150 assertions, console runner, exit code is the result |
+| `src/Twinstall.Core` | ✅ analysed clean, **155/155 tests passing** |
+| `src/Twinstall.Tests` | ✅ 155 assertions, console runner, exit code is the result |
 | `src/Twinstall.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
 | `src/Twinstall.App` | ✅ `Twinstall.exe` — router, launcher, icon watcher, management UI |
 | **Detection, all steps** | ✅ verified against Claude, Slack and VS Code |
-| Release artifacts | ✅ `scripts/publish.ps1` → two zips + `SHA256SUMS.txt` |
+| Release artifacts | ✅ `scripts/publish.ps1` → two single-file exes + `SHA256SUMS.txt` |
 | Code signing | ❌ unsigned; the real fix for AV/SmartScreen and not yet done |
 | MSIX packaging | ❌ manifest is a sketch with `REPLACE` placeholders and no assets |
 | Store submission | ❌ blocked on the certification question below |
@@ -64,8 +68,8 @@ running instances: 42636=Claude, 31172=Second
 type, so a protocol callback never pays for loading the UI. Keep it that way — routing sits
 between a browser sign-in and the app opening, with a user waiting.
 
-`reference/` holds the **working** Claude-specific version this is generalised from. It runs on
-the author's machine today. Port from it; don't reinvent it.
+The single-app tool this was generalised from is kept outside the repository. Its lessons are
+recorded here rather than its code.
 
 ---
 
@@ -101,7 +105,7 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 150   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 155   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.

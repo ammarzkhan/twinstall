@@ -206,7 +206,7 @@ Each of these was found by running the code against real applications, not by re
   forward `--user-data-dir`, so Slack was reported as unsupported. `LauncherStub.Resolve`
   redirects to `app-<version>\slack.exe`; the same launch then passes in 1.4s.
 - **`ProcessMap` counted unrelated programs as running instances.** It matched on executable
-  file name alone, so the Claude Code CLI — also `claude.exe`, different path — was reported as
+  file name alone, so a separate command-line tool — also `claude.exe`, different path — was reported as
   a running desktop instance. That is enough to turn "nothing is running, ask the user" into a
   confident "only one is running" and route a sign-in to an instance that was never there.
 - **Scheme discovery found nothing for already-configured machines.** Keeping only registrations

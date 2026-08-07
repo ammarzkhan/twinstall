@@ -75,7 +75,7 @@ jobs:
                    -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false 2>&1 | Out-String
           $warnings = ([regex]::Matches($out, ': warning ')).Count
           "analyser warnings at latest-all: $warnings"
-          # Ten are deliberate and documented in CLAUDE.md. More than that wants a look.
+          # Ten are deliberate and documented in ENGINEERING.md. More than that wants a look.
           if ($warnings -gt 10) { $out | Write-Host; throw "unexpected analyser warnings ($warnings > 10)" }
 
       - name: Publish release artifacts
