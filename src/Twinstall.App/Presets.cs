@@ -24,15 +24,42 @@ namespace Twinstall.App
     /// </summary>
     internal static class Presets
     {
+        /// <summary>
+        /// Prefers a presets file sitting beside the executable, because that one can be edited
+        /// to add an app; falls back to the copy embedded in the binary, which is what makes a
+        /// single-file build genuinely single.
+        /// </summary>
+        private static string ReadPresetJson()
+        {
+            try
+            {
+                string file = Path.Combine(AppContext.BaseDirectory, "presets", "apps.json");
+                if (File.Exists(file)) return File.ReadAllText(file);
+            }
+            catch (IOException ex) { Log.Write("presets file unreadable: " + ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Write("presets file unreadable: " + ex.Message); }
+
+            try
+            {
+                using (Stream s = System.Reflection.Assembly.GetExecutingAssembly()
+                           .GetManifestResourceStream("Twinstall.App.presets.json"))
+                {
+                    if (s == null) return null;
+                    using (var reader = new StreamReader(s)) return reader.ReadToEnd();
+                }
+            }
+            catch (IOException ex) { Log.Write("embedded presets unreadable: " + ex.Message); return null; }
+        }
+
         internal static IList<Preset> Load()
         {
             var presets = new List<Preset>();
             try
             {
-                string file = Path.Combine(AppContext.BaseDirectory, "presets", "apps.json");
-                if (!File.Exists(file)) return presets;
+                string json = ReadPresetJson();
+                if (string.IsNullOrWhiteSpace(json)) return presets;
 
-                using (JsonDocument doc = JsonDocument.Parse(File.ReadAllText(file)))
+                using (JsonDocument doc = JsonDocument.Parse(json))
                 {
                     if (!doc.RootElement.TryGetProperty("apps", out JsonElement apps)) return presets;
 

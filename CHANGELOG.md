@@ -4,6 +4,34 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Added — it is one file now, and it installs itself
+
+Sharing it previously meant handing someone a zip, which they unpacked, then hunted for the
+executable among a handful of DLLs, then ran from wherever it landed. That last part is not
+cosmetic: shortcuts and the registered protocol handler both record an absolute path, so a copy
+run from Downloads stops routing sign-ins the moment that folder is tidied up, with nothing to
+say why.
+
+- **Releases are single executables.** `Twinstall-<version>.exe` (~0.6 MB, needs the .NET 8
+  Desktop Runtime) and `Twinstall-<version>-standalone.exe` (~147 MB, needs nothing). The
+  presets are embedded, so a single file really is a single file.
+- **First run offers to install.** It copies itself to `%LOCALAPPDATA%\Programs\Twinstall`, adds
+  a Start-menu entry for itself, registers in Settings → Apps → Installed apps, and relaunches
+  from there. Declining runs it in place, which is fine for a look.
+- Neither build enables single-file compression. That gets the output quarantined mid-bundle —
+  see [SECURITY.md](SECURITY.md).
+
+### Fixed
+
+- **Renaming an account left its old shortcut behind for ever.** Shortcuts were only ever added,
+  never reconciled, so a Start menu accumulated one entry per name an account had ever had.
+  Twinstall's own shortcuts are now cleared before writing the current set.
+
+  They are identified by *where they point* — a target named `Twinstall.exe` with a `--launch`
+  argument — not by name, so a desktop is never swept for a pattern. Matching on the full path
+  was tried first and was wrong: shortcuts left by an earlier install location point at the old
+  folder, which is precisely the stale case worth removing.
+
 ### Changed — the management UI
 
 Rebuilt as a four-step flow instead of one page. The old window showed app selection, a raw

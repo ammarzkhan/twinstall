@@ -109,6 +109,20 @@ namespace Twinstall.App
 
                 ApplicationConfiguration.Initialize();
 
+                bool justInstalled = argv != null && argv.Length > 0
+                    && string.Equals(argv[0], "--installed", StringComparison.OrdinalIgnoreCase);
+
+                if (justInstalled)
+                {
+                    Installer.CompleteInstall();
+                }
+                else if (argv == null || argv.Length == 0)
+                {
+                    // A copy sitting in Downloads offers to move in properly. Declining is
+                    // fine — it carries on running from where it is. --portable skips the ask.
+                    if (Installer.OfferInstall()) return 0;   // the installed copy took over
+                }
+
                 // --preview <1-5> opens one screen directly with representative data. It exists
                 // so the layout can be reviewed without clicking through the flow; it seeds
                 // nothing on disk, starts no application, and applies nothing.

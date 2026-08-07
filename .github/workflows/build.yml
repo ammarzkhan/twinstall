@@ -86,7 +86,7 @@ jobs:
         with:
           name: twinstall-artifacts
           path: |
-            artifacts/*.zip
+            artifacts/*.exe
             artifacts/SHA256SUMS.txt
 
   # ---------------------------------------------------------------------------
@@ -113,7 +113,7 @@ jobs:
         run: dotnet run --project src/Twinstall.Tests -c Release --no-build
 
   # ---------------------------------------------------------------------------
-  # Tagged releases only. Publishes the zips and their hashes to a GitHub release.
+  # Tagged releases only. Publishes the single-file executables and their hashes.
   #
   # There is deliberately no MSIX step here yet. The manifest still carries REPLACE
   # placeholders and has no assets, and the question that gates it — whether Store
@@ -141,4 +141,4 @@ jobs:
           gh release create "${GITHUB_REF_NAME}" \
             --title "Twinstall ${GITHUB_REF_NAME}" \
             --notes "See CHANGELOG.md. These binaries are UNSIGNED — read SECURITY.md before running them, and verify against SHA256SUMS.txt." \
-            artifacts/*.zip artifacts/SHA256SUMS.txt
+            artifacts/*.exe artifacts/SHA256SUMS.txt

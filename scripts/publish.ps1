@@ -49,47 +49,55 @@ $version = (Select-Xml -Path (Join-Path $repo 'Directory.Build.props') -XPath '/
 if (-not $version) { $version = '0.0.0' }
 Write-Host "version: $version"
 
-function Publish-Variant {
-    param([string] $Name, [string[]] $ExtraArgs)
+# Single files, not folders to unpack. Somebody handed a zip has to unpack it, find the
+# executable among a handful of DLLs, and decide where to keep it — and where they keep it
+# matters, because shortcuts and the protocol handler record an absolute path. One file that
+# installs itself on first run removes every step of that.
+function Publish-Single {
+    param([string] $Name, [string] $FileName, [string[]] $ExtraArgs)
 
     $dir = Join-Path $staging $Name
     Write-Host "`n== publishing $Name ==" -ForegroundColor Cyan
 
-    $publishArgs = @('publish', $project, '-c', $Configuration, '-o', $dir) + $ExtraArgs
+    $publishArgs = @('publish', $project, '-c', $Configuration, '-o', $dir,
+                     '-p:PublishSingleFile=true',
+                     # NEVER on. A compressed payload expanded at run time is the shape of a
+                     # packer and gets the build quarantined mid-bundle. See docs/BUILDING.md.
+                     '-p:EnableCompressionInSingleFile=false') + $ExtraArgs
     & dotnet @publishArgs | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw "Publish of $Name failed. If the error mentions GenerateBundle and access denied, " +
               "antivirus quarantined the output mid-build - check its logs before assuming a file lock."
     }
 
-    # Debug symbols are not part of a release download.
-    Get-ChildItem $dir -Recurse -Filter *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
-
-    if (-not (Test-Path (Join-Path $dir 'Twinstall.exe'))) {
+    $built = Join-Path $dir 'Twinstall.exe'
+    if (-not (Test-Path $built)) {
         throw "$Name produced no Twinstall.exe - it was most likely quarantined. Check your AV."
     }
 
-    $zip = Join-Path $OutputDirectory "twinstall-$version-$Runtime$(if ($Name -eq 'standalone') { '-standalone' } else { '' }).zip"
-    Compress-Archive -Path (Join-Path $dir '*') -DestinationPath $zip -Force
-    return $zip
+    $final = Join-Path $OutputDirectory $FileName
+    Copy-Item $built $final -Force
+    return $final
 }
 
-$zips = @()
-$zips += Publish-Variant -Name 'portable'   -ExtraArgs @()
-$zips += Publish-Variant -Name 'standalone' -ExtraArgs @('-r', $Runtime, '--self-contained',
-                                                         '-p:PublishSingleFile=false')
+$files = @()
+# Small, but the target machine needs the .NET 8 Desktop Runtime.
+$files += Publish-Single -Name 'portable' -FileName "Twinstall-$version.exe" -ExtraArgs @('-r', $Runtime, '--self-contained:false')
+# Large, but needs nothing installed at all.
+$files += Publish-Single -Name 'standalone' -FileName "Twinstall-$version-standalone.exe" -ExtraArgs @('-r', $Runtime, '--self-contained')
 
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "`n== SHA-256 ==" -ForegroundColor Cyan
-$lines = foreach ($zip in $zips) {
-    $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
-    $line = "$hash  $(Split-Path -Leaf $zip)"
-    Write-Host $line
+$lines = foreach ($f in $files) {
+    $hash = (Get-FileHash $f -Algorithm SHA256).Hash.ToLowerInvariant()
+    $line = "$hash  $(Split-Path -Leaf $f)"
+    Write-Host ("{0}   {1,8:N1} MB" -f $line, ((Get-Item $f).Length / 1MB))
     $line
 }
 $lines | Set-Content (Join-Path $OutputDirectory 'SHA256SUMS.txt') -Encoding ascii
 
 Write-Host "`nArtifacts in $OutputDirectory" -ForegroundColor Green
+Write-Host "Each is one file. Running it offers to install into %LOCALAPPDATA%\Programs\Twinstall."
 Write-Host "Publish SHA256SUMS.txt alongside the release so people can verify what they downloaded."
 Write-Host "These binaries are UNSIGNED - see SECURITY.md before sharing them." -ForegroundColor Yellow

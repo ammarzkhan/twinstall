@@ -83,6 +83,10 @@
     <!-- Embedded so the window icon keeps every size. ExtractAssociatedIcon would give a
          single 32px frame, which looks soft on a high-DPI taskbar. -->
     <EmbeddedResource Include="..\..\assets\twinstall.ico" LogicalName="Twinstall.App.logo.ico" />
+
+    <!-- Also embedded, so a single-file build really is a single file. It stays copied
+         beside the exe as well, because that copy is editable and the embedded one is not. -->
+    <EmbeddedResource Include="..\..\presets\apps.json" LogicalName="Twinstall.App.presets.json" />
   </ItemGroup>
 
 </Project>

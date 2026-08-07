@@ -398,6 +398,12 @@ namespace Twinstall.App
                 string app = AppLabel(cfg);
                 string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
 
+                // Renaming an account used to leave its old shortcut behind for ever, because
+                // shortcuts were only ever added. Clear ours out first so the set on disk
+                // matches the set configured.
+                PruneOurShortcuts(shellType, shell, ShortcutFolder);
+                PruneOurShortcuts(shellType, shell, desktop);
+
                 foreach (Instance inst in cfg.Instances)
                 {
                     // In the Start menu they sit inside a Twinstall folder, so the account name
@@ -422,6 +428,60 @@ namespace Twinstall.App
             catch (UnauthorizedAccessException ex) { Log.Write("shortcut creation failed: " + ex.Message); }
             catch (IOException ex) { Log.Write("shortcut creation failed: " + ex.Message); }
             return made;
+        }
+
+        /// <summary>
+        /// Deletes only the shortcuts Twinstall itself made, identified by where they point
+        /// rather than by what they are called.
+        ///
+        /// Matching on names would mean sweeping a desktop for a pattern, which is not a risk
+        /// worth taking; a shortcut whose target is our executable and whose arguments contain
+        /// --launch is unambiguously ours. The app's own shortcut has no --launch and survives.
+        /// </summary>
+        private static void PruneOurShortcuts(Type shellType, object shell, string folder)
+        {
+            if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder)) return;
+
+            string[] links;
+            try { links = Directory.GetFiles(folder, "*.lnk"); }
+            catch (IOException) { return; }
+            catch (UnauthorizedAccessException) { return; }
+
+            foreach (string path in links)
+            {
+                try
+                {
+                    object link = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
+                        null, shell, new object[] { path }, CultureInfo.InvariantCulture);
+                    if (link == null) continue;
+
+                    Type t = link.GetType();
+                    string target = Get(t, link, "TargetPath");
+                    string args = Get(t, link, "Arguments");
+
+                    // Matched on the executable's NAME, not its full path. A shortcut left over
+                    // from a previous install location still points at the old folder, and
+                    // comparing against the current path would skip exactly the stale entries
+                    // this exists to clear — which is what happened the first time.
+                    if (!string.Equals(Path.GetFileName(target ?? string.Empty), "Twinstall.exe",
+                                       StringComparison.OrdinalIgnoreCase)) continue;
+
+                    if (string.IsNullOrEmpty(args) || args.IndexOf("--launch", StringComparison.OrdinalIgnoreCase) < 0)
+                        continue;   // the app's own shortcut, not an account's
+
+                    File.Delete(path);
+                }
+                catch (TargetInvocationException) { }
+                catch (MissingMethodException) { }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        private static string Get(Type type, object target, string property)
+        {
+            return type.InvokeMember(property, BindingFlags.GetProperty, null, target, null,
+                CultureInfo.InvariantCulture) as string;
         }
 
         private static bool Write(Type shellType, object shell, string linkPath, Instance inst, string app)
@@ -455,6 +515,42 @@ namespace Twinstall.App
         {
             type.InvokeMember(property, BindingFlags.SetProperty, null, target,
                 new object[] { value }, CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// A Start-menu entry for Twinstall itself, distinct from the per-account ones. Without
+        /// it the only way back into the app after setup is to remember where the folder is.
+        /// </summary>
+        internal static void CreateAppShortcut()
+        {
+            try
+            {
+                Directory.CreateDirectory(ShortcutFolder);
+
+                Type shellType = Type.GetTypeFromProgID("WScript.Shell");
+                if (shellType == null) return;
+                object shell = Activator.CreateInstance(shellType);
+                if (shell == null) return;
+
+                string linkPath = Path.Combine(ShortcutFolder, AppPaths.ProductName + ".lnk");
+                object link = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
+                    null, shell, new object[] { linkPath }, CultureInfo.InvariantCulture);
+                if (link == null) return;
+
+                Type linkType = link.GetType();
+                Set(linkType, link, "TargetPath", AppPaths.SelfExe);
+                Set(linkType, link, "Description", "Run two accounts of the same app side by side");
+                Set(linkType, link, "WorkingDirectory", Path.GetDirectoryName(AppPaths.SelfExe) ?? AppPaths.Home);
+                Set(linkType, link, "IconLocation", AppPaths.SelfExe + ",0");
+
+                linkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null,
+                    CultureInfo.InvariantCulture);
+                Log.Write("added the Twinstall shortcut");
+            }
+            catch (TargetInvocationException ex) { Log.Write("app shortcut failed: " + ex.Message); }
+            catch (MissingMethodException ex) { Log.Write("app shortcut failed: " + ex.Message); }
+            catch (UnauthorizedAccessException ex) { Log.Write("app shortcut failed: " + ex.Message); }
+            catch (IOException ex) { Log.Write("app shortcut failed: " + ex.Message); }
         }
 
         internal static void RemoveShortcuts(AppConfig cfg)

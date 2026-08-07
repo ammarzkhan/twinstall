@@ -42,6 +42,34 @@ it once — whether it really honours separate profiles at all. See
 
 ## Getting started
 
+### Install it
+
+Download **one file** from [Releases](../../releases) and run it. It offers to install itself
+into `%LOCALAPPDATA%\Programs\Twinstall`, adds a Start-menu entry, and appears in
+Settings → Apps → Installed apps so it can be removed like anything else. No administrator
+prompt; nothing is written outside your own user profile.
+
+| File | Size | Needs |
+|---|---|---|
+| `Twinstall-<version>.exe` | ~0.6 MB | the [.NET 8 **Desktop** Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| `Twinstall-<version>-standalone.exe` | ~147 MB | nothing at all |
+
+Take the small one unless you would rather not install a runtime. Both are a single file with
+everything inside — there is no folder to keep, and nothing to unpack.
+
+Choosing **No** at the install prompt runs it where it stands, which is fine for trying it out.
+Bear in mind that shortcuts and the protocol handler record an absolute path, so a copy run from
+Downloads stops working the moment that folder is tidied up.
+
+Verify what you downloaded against `SHA256SUMS.txt`:
+
+```bash
+powershell -NoProfile -Command "Get-FileHash .\Twinstall-0.3.0.exe -Algorithm SHA256"
+```
+
+The binaries are **unsigned**. [SECURITY.md](SECURITY.md) explains what that means, why
+antivirus software may object, and what we will never advise you to do about it.
+
 ### Build it
 
 Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). From the repository
