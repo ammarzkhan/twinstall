@@ -73,10 +73,20 @@ jobs:
           # re-derives the mode and wins, reporting a false clean. Use latest-all.
           $out = dotnet build Twinstall.sln -c Release --no-incremental `
                    -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false 2>&1 | Out-String
-          $warnings = ([regex]::Matches($out, ': warning ')).Count
-          "analyser warnings at latest-all: $warnings"
+
+          # Count DISTINCT warnings. MSBuild reports each one once per project that
+          # references the project producing it, so a raw match count roughly doubles the
+          # real figure - it read 18 here against a real 9, and failed a gate meant for 10.
+          $unique = $out -split "`r?`n" |
+                    Where-Object { $_ -match ': warning ' } |
+                    ForEach-Object { ($_ -replace '^.*?: warning ','') -replace ' \[.*$','' } |
+                    Sort-Object -Unique
+
+          "analyser warnings at latest-all: $($unique.Count)"
+          $unique | ForEach-Object { "  $_" }
+
           # Ten are deliberate and documented in ENGINEERING.md. More than that wants a look.
-          if ($warnings -gt 10) { $out | Write-Host; throw "unexpected analyser warnings ($warnings > 10)" }
+          if ($unique.Count -gt 10) { throw "unexpected analyser warnings ($($unique.Count) > 10)" }
 
       - name: Publish release artifacts
         shell: pwsh
