@@ -45,13 +45,24 @@ namespace Twinstall.Platform
                     g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
                     g.Clear(Color.Transparent);
 
-                    const int inset = 26;                 // room for the badge
+                    // The badge sits TOP-RIGHT and is deliberately large.
+                    //
+                    // At taskbar size the coloured disc is the only thing telling two windows
+                    // of the same application apart, and a taskbar icon is 16-24px. A
+                    // Chrome-style corner dot at 46% of the canvas comes out as a handful of
+                    // pixels there — technically present, useless in practice. Top-right also
+                    // keeps it clear of the taskbar's own running-app underline and of the
+                    // overflow chevron.
+                    //
+                    // The logo is pushed down-left to make room rather than scaled smaller in
+                    // place, so it stays as large as it can while leaving the corner free.
+                    const int inset = 34;
                     int baseSize = Size - inset;
                     if (source != null)
-                        g.DrawImage(source, 0, 0, baseSize, baseSize);
+                        g.DrawImage(source, 0, inset, baseSize, baseSize);
 
-                    int d = (int)(Size * 0.46);
-                    int x = Size - d - 5, y = Size - d - 5, halo = 8;
+                    int d = (int)(Size * 0.56);
+                    int x = Size - d - 2, y = 2, halo = 9;
 
                     using (var white = new SolidBrush(Color.White))
                     using (var fill  = new SolidBrush(ColorTranslator.FromHtml(hexColour)))

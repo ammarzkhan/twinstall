@@ -227,6 +227,13 @@ namespace Twinstall.App
         /// <summary>So a rollback only reverts the taskbar setting if this run turned it on.</summary>
         private bool _taskbarWasOnBefore;
 
+        /// <summary>
+        /// On by default. Someone setting up a second account of an app they use daily wants to
+        /// reach it, and hunting the Start menu for it is the thing they were already doing.
+        /// It is a visible, labelled checkbox on the review screen, so it is never a surprise.
+        /// </summary>
+        private bool _desktopShortcuts = true;
+
         // ------------------------------------------------------------ stepping --
         private void Show(Step step)
         {
@@ -626,7 +633,7 @@ namespace Twinstall.App
             int y = AddNote(0, "Everything below is per-user. No administrator prompt, nothing outside your "
                              + "own profile, and all of it can be undone from this window.");
 
-            foreach (string line in Registration.DescribeChanges(_config, _taskbarOptIn))
+            foreach (string line in Registration.DescribeChanges(_config, _taskbarOptIn, _desktopShortcuts))
             {
                 var l = new Label
                 {
@@ -640,6 +647,34 @@ namespace Twinstall.App
                 _content.Controls.Add(l);
                 y += 36;
             }
+
+            var desktop = new CheckBox
+            {
+                Text = "  Also put shortcuts on the Desktop",
+                Font = Theme.Body,
+                ForeColor = Theme.Text,
+                BackColor = Theme.Background,
+                Checked = _desktopShortcuts,
+                AutoSize = false,
+                FlatStyle = FlatStyle.Standard,
+                Location = new Point(2, y + 10),
+                Size = new Size(_content.Width - 30, 26)
+            };
+            desktop.CheckedChanged += (s, e) => { _desktopShortcuts = desktop.Checked; ShowLater(Step.Review); };
+            _content.Controls.Add(desktop);
+
+            var desktopNote = new Label
+            {
+                Text = "Named “" + Registration.AppLabel(_config) + " - <account>” so they still make sense "
+                     + "sitting among everything else. The Start-menu ones are added either way.",
+                Font = Theme.Small,
+                ForeColor = Theme.TextMuted,
+                AutoSize = false,
+                Location = new Point(24, y + 36),
+                Size = new Size(_content.Width - 52, 34)
+            };
+            _content.Controls.Add(desktopNote);
+            y += 62;
 
             var taskbar = new CheckBox
             {
@@ -683,7 +718,7 @@ namespace Twinstall.App
             catch (UnauthorizedAccessException ex) { Ui.Error("Could not write the configuration.\r\n\r\n" + ex.Message); return; }
 
             int icons = Router.ComposeIcons(_config);
-            int shortcuts = Registration.CreateShortcuts(_config);
+            int shortcuts = Registration.CreateShortcuts(_config, _desktopShortcuts);
             bool registered = !string.IsNullOrWhiteSpace(_config.Scheme)
                               && Registration.RegisterProtocol(_config.Scheme);
 
@@ -932,7 +967,7 @@ namespace Twinstall.App
         {
             AppConfig saved = InstanceConfig.Load(AppPaths.ConfigFile);
             Registration.RemoveAllRegistration(saved);
-            Registration.RemoveShortcuts();
+            Registration.RemoveShortcuts(saved);
 
             // Only revert the taskbar setting if this run turned it on.
             if (_taskbarOptIn && !_taskbarWasOnBefore) Registration.SetTaskbarNeverCombine(false);

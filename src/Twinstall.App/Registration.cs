@@ -380,7 +380,7 @@ namespace Twinstall.App
         /// Created through WScript.Shell by late binding rather than a COM reference, which
         /// keeps the build free of an interop assembly for four lines of work.
         /// </summary>
-        internal static int CreateShortcuts(AppConfig cfg)
+        internal static int CreateShortcuts(AppConfig cfg, bool alsoOnDesktop)
         {
             if (cfg == null || cfg.Instances.Count == 0) return 0;
 
@@ -395,27 +395,27 @@ namespace Twinstall.App
                 object shell = Activator.CreateInstance(shellType);
                 if (shell == null) return 0;
 
+                string app = AppLabel(cfg);
+                string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
                 foreach (Instance inst in cfg.Instances)
                 {
-                    string linkPath = Path.Combine(ShortcutFolder, AppPaths.Sanitise(inst.Name) + ".lnk");
-                    object link = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
-                        null, shell, new object[] { linkPath }, CultureInfo.InvariantCulture);
-                    if (link == null) continue;
+                    // In the Start menu they sit inside a Twinstall folder, so the account name
+                    // alone is unambiguous. On the desktop they sit among everything else, so
+                    // they carry the application name too — a bare "Second" on someone's
+                    // desktop means nothing a week later.
+                    if (Write(shellType, shell, Path.Combine(ShortcutFolder, AppPaths.Sanitise(inst.Name) + ".lnk"),
+                              inst, app)) made++;
 
-                    Type linkType = link.GetType();
-                    Set(linkType, link, "TargetPath", AppPaths.SelfExe);
-                    Set(linkType, link, "Arguments", "--launch \"" + inst.Name + "\"");
-                    Set(linkType, link, "Description", inst.Name + " (via Twinstall)");
-                    Set(linkType, link, "WorkingDirectory", AppPaths.Home);
-
-                    string ico = AppPaths.IconFor(inst.Name);
-                    if (File.Exists(ico)) Set(linkType, link, "IconLocation", ico + ",0");
-
-                    linkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null,
-                        CultureInfo.InvariantCulture);
-                    made++;
+                    if (alsoOnDesktop && Directory.Exists(desktop))
+                    {
+                        Write(shellType, shell,
+                              Path.Combine(desktop, AppPaths.Sanitise(app + " - " + inst.Name) + ".lnk"),
+                              inst, app);
+                    }
                 }
-                Log.Write("created " + made.ToString(CultureInfo.InvariantCulture) + " shortcut(s)");
+                Log.Write("created " + made.ToString(CultureInfo.InvariantCulture) + " Start-menu shortcut(s)"
+                          + (alsoOnDesktop ? " and matching desktop shortcuts" : string.Empty));
             }
             catch (TargetInvocationException ex) { Log.Write("shortcut creation failed: " + ex.Message); }
             catch (MissingMethodException ex) { Log.Write("shortcut creation failed: " + ex.Message); }
@@ -424,13 +424,40 @@ namespace Twinstall.App
             return made;
         }
 
+        private static bool Write(Type shellType, object shell, string linkPath, Instance inst, string app)
+        {
+            object link = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod,
+                null, shell, new object[] { linkPath }, CultureInfo.InvariantCulture);
+            if (link == null) return false;
+
+            Type linkType = link.GetType();
+            Set(linkType, link, "TargetPath", AppPaths.SelfExe);
+            Set(linkType, link, "Arguments", "--launch \"" + inst.Name + "\"");
+            Set(linkType, link, "Description", app + " — " + inst.Name + " (via Twinstall)");
+            Set(linkType, link, "WorkingDirectory", AppPaths.Home);
+
+            string ico = AppPaths.IconFor(inst.Name);
+            if (File.Exists(ico)) Set(linkType, link, "IconLocation", ico + ",0");
+
+            linkType.InvokeMember("Save", BindingFlags.InvokeMethod, null, link, null, CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        /// <summary>The target application's name, for labelling shortcuts.</summary>
+        internal static string AppLabel(AppConfig cfg)
+        {
+            string name = cfg == null ? null : Path.GetFileNameWithoutExtension(cfg.ExePath);
+            if (string.IsNullOrEmpty(name)) return "App";
+            return char.ToUpperInvariant(name[0]) + name.Substring(1);
+        }
+
         private static void Set(Type type, object target, string property, string value)
         {
             type.InvokeMember(property, BindingFlags.SetProperty, null, target,
                 new object[] { value }, CultureInfo.InvariantCulture);
         }
 
-        internal static void RemoveShortcuts()
+        internal static void RemoveShortcuts(AppConfig cfg)
         {
             try
             {
@@ -438,10 +465,24 @@ namespace Twinstall.App
             }
             catch (IOException ex) { Log.Write("could not remove shortcuts: " + ex.Message); }
             catch (UnauthorizedAccessException ex) { Log.Write("could not remove shortcuts: " + ex.Message); }
+
+            // Desktop shortcuts are removed by exact name only. A wildcard sweep of someone's
+            // desktop is not a risk worth taking to save a few lines.
+            if (cfg == null) return;
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string app = AppLabel(cfg);
+
+            foreach (Instance inst in cfg.Instances)
+            {
+                string link = Path.Combine(desktop, AppPaths.Sanitise(app + " - " + inst.Name) + ".lnk");
+                try { if (File.Exists(link)) File.Delete(link); }
+                catch (IOException ex) { Log.Write("could not remove " + link + ": " + ex.Message); }
+                catch (UnauthorizedAccessException ex) { Log.Write("could not remove " + link + ": " + ex.Message); }
+            }
         }
 
         /// <summary>A plain-language list of what setup will change. Shown before it happens.</summary>
-        internal static IList<string> DescribeChanges(AppConfig cfg, bool taskbarOptIn)
+        internal static IList<string> DescribeChanges(AppConfig cfg, bool taskbarOptIn, bool desktopShortcuts)
         {
             var lines = new List<string>
             {
@@ -450,6 +491,9 @@ namespace Twinstall.App
                 "Add a Start-menu shortcut for each account",
                 "Register Twinstall as a candidate handler for " + (cfg?.Scheme ?? "(none)") + "://"
             };
+
+            if (desktopShortcuts)
+                lines.Insert(3, "Add a desktop shortcut for each account");
 
             if (!string.IsNullOrWhiteSpace(cfg?.Scheme))
                 lines.Add("Open Settings so you can choose Twinstall for " + cfg.Scheme + ":// yourself");
