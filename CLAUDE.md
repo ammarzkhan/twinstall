@@ -269,8 +269,22 @@ because an ordinal sort puts `app-4.9.0` above `app-4.10.0`.
 **Don't trust a preset hint you haven't run.** Every entry in `presets/apps.json` pointed at the
 wrong executable on a real machine: Slack and VS Code at unusable root paths, and Claude at
 `%LOCALAPPDATA%\AnthropicClaude`, which **does not exist on a Store install** — and Claude was the
-entry marked `verified: true`. Hints are now ordered most-specific-first and every one says what
-was actually measured. `verified: true` still means end-to-end, not "detection worked".
+entry marked `verified: true`. Hints are now ordered most-specific-first and every one carries a
+`provenance` of `measured` (the probe was run against a real install) or `inferred` (the layout
+follows a known installer convention and has never been run here). `verified: true` still means
+end-to-end, not "detection worked".
+
+**`apps.json` is not a compatibility matrix, and published ones are measuring the wrong thing.**
+A circulated list of Electron apps sorted them into "simultaneous concurrency", "sequential
+switching" and "single active account only", putting **Claude** and **Loom** in the last group.
+Both were measured here as `Honoured`, and two Claude instances have run side by side on the dev
+machine throughout.
+
+That kind of list describes **an app's own account-switching UI**. Twinstall asks a different
+question — *does the app honour `--user-data-dir`* — and nearly every Electron app does
+regardless of what its UI offers. That gap is the reason this product exists, so never let such
+a list gate which apps are offered, and never let presence in `apps.json` stand in for the
+launch test. Only step 5 decides.
 
 **The 30s probe timeout is not generous, it is necessary.** Claude took 1.5s and Slack 1.4s, but
 VS Code took 14s on the first run against a cold profile. A 10s timeout would have produced a

@@ -1,61 +1,180 @@
 {
   "$schema": "./apps.schema.json",
-  "version": 2,
-  "note": "Convenience only. Detection is fully automatic (see docs/DETECTION.md) - these entries just help users find an executable. No profile paths or URL schemes are stored; both are derived at run time.",
-  "hintNote": "Hints are directories to look for exeName in. A '*' segment matches one directory level. Landing on a launcher stub is not fatal - LauncherStub.Resolve redirects Squirrel stubs to the real app-<version> executable - but a hint that points at the real thing saves the user a step.",
+  "version": 3,
+  "note": "Convenience only. Detection is fully automatic (see docs/DETECTION.md) - these entries just help users find an executable. No profile paths or URL schemes are stored; both are derived at run time. An app can be removed from this file with no functional change, and an app that is NOT in it works identically via Browse.",
+  "notAPromise": "Presence here does not mean an app is supported, and absence does not mean it isn't. Only the step-5 launch test decides, by starting the app once against a throwaway profile. Do not use this file as a compatibility matrix.",
+  "hintNote": "Hints are directories to look for exeName in. A '*' segment matches one directory level, newest first by numeric version. Landing on a launcher stub is not fatal - LauncherStub.Resolve redirects Squirrel stubs to the real app-<version> executable - but a hint that points at the real thing saves the user a step. Store apps cannot be found by enumerating WindowsApps (a normal process may traverse it but not list it); PackageIndex reads their install paths from MrtCache instead.",
+  "provenance": "measured = the launch probe was run against a real install on a real machine, and the hint resolved. inferred = the layout follows a known installer convention but has never been run here. Treat inferred hints as a guess that costs the user one Browse if wrong.",
   "apps": [
     {
       "id": "slack",
       "displayName": "Slack",
       "exeName": "slack.exe",
-      "hints": [
-        "%LOCALAPPDATA%\\slack\\app-*",
-        "%LOCALAPPDATA%\\slack"
-      ],
+      "hints": ["%LOCALAPPDATA%\\slack\\app-*", "%LOCALAPPDATA%\\slack"],
       "verified": false,
-      "note": "Detection and launch test verified 7 Aug 2026 against Slack 4.51.180. The root %LOCALAPPDATA%\\slack\\slack.exe is a Squirrel stub: it scores zero Chromium markers and fails the launch test after the full 30s, because it does not forward --user-data-dir. app-4.51.180\\slack.exe scores 5 and passes in 1.4s. The versioned hint is listed first for that reason. Routing and badging are still untested, so this stays verified:false."
-    },
-    {
-      "id": "discord",
-      "displayName": "Discord",
-      "exeName": "Discord.exe",
-      "hints": [
-        "%LOCALAPPDATA%\\Discord\\app-*",
-        "%LOCALAPPDATA%\\Discord"
-      ],
-      "verified": false,
-      "note": "Not installed on any machine we have tested. Discord uses the same Squirrel layout as Slack, so the versioned hint is listed first by analogy - that is an inference, not a measurement."
-    },
-    {
-      "id": "vscode",
-      "displayName": "Visual Studio Code",
-      "exeName": "Code.exe",
-      "hints": [
-        "%LOCALAPPDATA%\\Programs\\Microsoft VS Code"
-      ],
-      "verified": false,
-      "note": "Has native profiles too; Twinstall adds taskbar badging and callback routing. Detection and launch test verified 7 Aug 2026. Note the layout: only Code.exe sits at the install root and every Chromium marker lives in a commit-hash folder beside it, so this app is only detected because ChromiumDetector sweeps one level of subdirectories. Unlike Slack's stub, the root executable does forward --user-data-dir - it passed in 3.6s."
-    },
-    {
-      "id": "signal",
-      "displayName": "Signal",
-      "exeName": "Signal.exe",
-      "hints": [
-        "%LOCALAPPDATA%\\Programs\\signal-desktop"
-      ],
-      "verified": false,
-      "note": "Not installed on any machine we have tested."
+      "provenance": "measured",
+      "note": "Detection and launch test verified 7 Aug 2026 against Slack 4.51.180. The root %LOCALAPPDATA%\\slack\\slack.exe is a Squirrel stub: zero Chromium markers, and it fails the launch test after the full 30s because it does not forward --user-data-dir. app-4.51.180\\slack.exe scores 5 and passes in 1.4s. Scheme slack://. Routing and badging still untested, so verified stays false."
     },
     {
       "id": "claude",
       "displayName": "Claude",
       "exeName": "Claude.exe",
-      "hints": [
-        "%ProgramFiles%\\WindowsApps\\Claude_*\\app",
-        "%LOCALAPPDATA%\\AnthropicClaude"
-      ],
+      "hints": ["%ProgramFiles%\\WindowsApps\\Claude_*\\app", "%LOCALAPPDATA%\\AnthropicClaude"],
       "verified": true,
-      "verifiedNotes": "End-to-end on Windows 11, Store build, Aug 2026: routing, isolation, Cowork VM, badged taskbar icons. Detection and launch test re-verified 7 Aug 2026 against Claude_1.25927.0.0_x64__pzs8sxrjxfjjc - 6 markers, probe passed in 1.5s, profile root correctly derived as %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming. The WindowsApps hint is listed first because the %LOCALAPPDATA%\\AnthropicClaude path does not exist on a Store install, which is how this preset was previously wrong."
+      "provenance": "measured",
+      "verifiedNotes": "End-to-end on Windows 11, Store build, Aug 2026: routing, isolation, Cowork VM, badged taskbar icons. Re-verified 7 Aug 2026 against Claude_1.25927.0.0_x64__pzs8sxrjxfjjc - 6 markers, probe passed in 1.5s, scheme claude://, profile root correctly derived as %LOCALAPPDATA%\\Packages\\Claude_pzs8sxrjxfjjc\\LocalCache\\Roaming. Two instances have been run side by side on the development machine all along."
+    },
+    {
+      "id": "vscode",
+      "displayName": "Visual Studio Code",
+      "exeName": "Code.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Microsoft VS Code", "%ProgramFiles%\\Microsoft VS Code"],
+      "verified": false,
+      "provenance": "measured",
+      "note": "Has native profiles too; Twinstall adds taskbar badging and callback routing. Verified 7 Aug 2026. Note the layout: only Code.exe sits at the install root and every Chromium marker lives in a commit-hash folder beside it, so this app is only detected because ChromiumDetector sweeps one level of subdirectories. Unlike Slack's stub, the root executable does forward --user-data-dir - it passed in 3.6s. Scheme vscode://."
+    },
+    {
+      "id": "loom",
+      "displayName": "Loom",
+      "exeName": "Loom.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Loom"],
+      "verified": false,
+      "provenance": "measured",
+      "note": "Verified 7 Aug 2026: 6 markers, probe passed in 3.1s, scheme loomDesktop://. Worth recording because a widely circulated compatibility list puts Loom under 'single active account only' - that describes its own account-switching UI, not whether it honours --user-data-dir. It does."
+    },
+    {
+      "id": "clickup",
+      "displayName": "ClickUp",
+      "exeName": "ClickUp.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\desktop", "%LOCALAPPDATA%\\Programs\\ClickUp"],
+      "verified": false,
+      "provenance": "measured",
+      "note": "Verified 7 Aug 2026: 6 markers, probe passed in 1.8s, scheme clickup://. Note the install folder is literally 'Programs\\desktop' with ClickUp.exe inside - the folder name is not the product name, which is exactly why detection reads the executable rather than trusting a path."
+    },
+    {
+      "id": "discord",
+      "displayName": "Discord",
+      "exeName": "Discord.exe",
+      "hints": ["%LOCALAPPDATA%\\Discord\\app-*", "%LOCALAPPDATA%\\Discord"],
+      "verified": false,
+      "provenance": "inferred",
+      "note": "Not installed on any machine we have tested. Squirrel layout assumed by analogy with Slack, so the versioned hint is listed first."
+    },
+    {
+      "id": "signal",
+      "displayName": "Signal",
+      "exeName": "Signal.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\signal-desktop"],
+      "verified": false,
+      "provenance": "inferred",
+      "note": "Not installed on any machine we have tested."
+    },
+    {
+      "id": "cursor",
+      "displayName": "Cursor",
+      "exeName": "Cursor.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\cursor"],
+      "verified": false,
+      "provenance": "inferred",
+      "note": "A VS Code fork, so expect the same commit-hash subfolder layout - detection handles that via the subdirectory sweep."
+    },
+    {
+      "id": "obsidian",
+      "displayName": "Obsidian",
+      "exeName": "Obsidian.exe",
+      "hints": ["%LOCALAPPDATA%\\Obsidian\\app-*", "%LOCALAPPDATA%\\Obsidian", "%LOCALAPPDATA%\\Programs\\obsidian"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "notion",
+      "displayName": "Notion",
+      "exeName": "Notion.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Notion"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "figma",
+      "displayName": "Figma",
+      "exeName": "Figma.exe",
+      "hints": ["%LOCALAPPDATA%\\Figma\\app-*", "%LOCALAPPDATA%\\Figma"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "githubdesktop",
+      "displayName": "GitHub Desktop",
+      "exeName": "GitHubDesktop.exe",
+      "hints": ["%LOCALAPPDATA%\\GitHubDesktop\\app-*", "%LOCALAPPDATA%\\GitHubDesktop"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "onepassword",
+      "displayName": "1Password",
+      "exeName": "1Password.exe",
+      "hints": ["%LOCALAPPDATA%\\1Password\\app\\8", "%ProgramFiles%\\1Password"],
+      "verified": false,
+      "provenance": "inferred",
+      "note": "A password manager holding two vaults deserves extra care: confirm the two profile folders really are separate before trusting it with a second account."
+    },
+    {
+      "id": "bitwarden",
+      "displayName": "Bitwarden",
+      "exeName": "Bitwarden.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Bitwarden"],
+      "verified": false,
+      "provenance": "inferred",
+      "note": "Same caution as 1Password."
+    },
+    {
+      "id": "joplin",
+      "displayName": "Joplin",
+      "exeName": "Joplin.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Joplin"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "element",
+      "displayName": "Element",
+      "exeName": "Element.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\element-desktop"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "postman",
+      "displayName": "Postman",
+      "exeName": "Postman.exe",
+      "hints": ["%LOCALAPPDATA%\\Postman\\app-*", "%LOCALAPPDATA%\\Postman"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "insomnia",
+      "displayName": "Insomnia",
+      "exeName": "Insomnia.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Insomnia"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "evernote",
+      "displayName": "Evernote",
+      "exeName": "Evernote.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Evernote"],
+      "verified": false,
+      "provenance": "inferred"
+    },
+    {
+      "id": "superhuman",
+      "displayName": "Superhuman",
+      "exeName": "Superhuman.exe",
+      "hints": ["%LOCALAPPDATA%\\Programs\\Superhuman"],
+      "verified": false,
+      "provenance": "inferred"
     }
   ]
 }

@@ -28,6 +28,23 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 - `Twinstall.exe --presets` — traces every preset hint, what it expands to, and the actual
   exception when it finds nothing. Answers "why didn't it find my app?" without guesswork.
+- Preset list grown from 5 apps to 20: Loom and ClickUp (both measured), plus Cursor, Obsidian,
+  Notion, Figma, GitHub Desktop, 1Password, Bitwarden, Joplin, Element, Postman, Insomnia,
+  Evernote and Superhuman (inferred layouts, never run here).
+- Every preset now carries a `provenance` field — `measured` or `inferred` — so the difference
+  between "we ran the probe against this" and "this follows a usual installer convention" is
+  visible rather than implied.
+
+### Changed
+
+- `apps.json` states explicitly that it is **not** a compatibility matrix. Presence does not mean
+  supported and absence does not mean unsupported; only the step-5 launch test decides.
+
+  Prompted by a circulated list of Electron apps that sorted them by concurrency mode and placed
+  Claude and Loom under "single active account only". Both measure as `Honoured` here, and two
+  Claude instances have run side by side on the development machine throughout. Such lists
+  describe an app's own account-switching UI, not whether it honours `--user-data-dir` — which is
+  a different question, and the reason this project exists.
 
 ## [0.3.0] — 2026-08-07
 
