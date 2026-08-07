@@ -1,0 +1,29 @@
+<!--
+  Twinstall's mark: the same tile, twice, told apart by colour.
+
+  That is the whole product in one shape — one application, two identities, distinguished
+  only by a colour you chose. The gap between the tiles is deliberate and is cut out of the
+  back tile rather than drawn as a stroke, so the mark survives on any background.
+
+  Teal is Twinstall's own colour; it belongs to none of the supported applications, which
+  matters because this icon sits in the taskbar directly beside theirs and must not read as
+  an official add-on for any of them.
+
+  scripts/make-logo.ps1 draws exactly this geometry with GDI+ and emits the PNG and ICO
+  assets. Keep the two in step.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <mask id="cut">
+      <rect x="0" y="0" width="256" height="256" fill="white"/>
+      <!-- the front tile, inflated, punched out of everything behind it -->
+      <rect x="83" y="83" width="158" height="158" rx="41" ry="41" fill="black"/>
+    </mask>
+  </defs>
+
+  <!-- back tile: the second account -->
+  <rect x="24" y="24" width="140" height="140" rx="32" ry="32" fill="#F59E0B" mask="url(#cut)"/>
+
+  <!-- front tile: the app itself -->
+  <rect x="92" y="92" width="140" height="140" rx="32" ry="32" fill="#0F766E"/>
+</svg>

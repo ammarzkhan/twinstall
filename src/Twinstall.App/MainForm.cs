@@ -49,6 +49,7 @@ namespace Twinstall.App
             ForeColor = Theme.Text;
             Font = Theme.Body;
 
+            Icon = Branding.AppIcon();
             BuildChrome();
             Load += (s, e) => { LoadPresets(); Show(_previewStep ?? Step.ChooseApp); };
         }

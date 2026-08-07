@@ -23,6 +23,25 @@ namespace Twinstall.App
         private const int UseImmersiveDarkMode = 20;
         private const int UseImmersiveDarkModeBefore20H1 = 19;
 
+        /// <summary>
+        /// Twinstall's own colour, deliberately not the Windows accent and deliberately not
+        /// anyone else's brand.
+        ///
+        /// Two constraints picked it. It sits in the taskbar beside Slack, Discord, VS Code and
+        /// Claude, and must not read as an official add-on for any of them — so aubergine,
+        /// blurple and Microsoft blue are all out. And the per-account badge colours are the
+        /// actual signal this product exists to provide, so the app's own chrome has to stay
+        /// clear of that palette rather than compete with it. Teal is owned by none of the
+        /// supported apps and appears in no badge.
+        /// </summary>
+        internal static readonly Color BrandLight = FromHex("#0F766E");
+
+        /// <summary>Lifted for dark surfaces — #0F766E on #1F1F1F is unreadable.</summary>
+        internal static readonly Color BrandDark = FromHex("#2DD4BF");
+
+        /// <summary>The warm counterpart, used only in the logo, to say "the same app twice".</summary>
+        internal static readonly Color BrandWarm = FromHex("#F59E0B");
+
         internal static bool IsDark { get; private set; }
 
         // --- palette -----------------------------------------------------------
@@ -77,7 +96,7 @@ namespace Twinstall.App
                 Bad        = FromHex("#B91C1C");
             }
 
-            Accent = SystemAccent();
+            Accent = IsDark ? BrandDark : BrandLight;
             AccentText = Luminance(Accent) > 0.55 ? FromHex("#141414") : Color.White;
 
             // Segoe UI Variable is the Windows 11 face; Segoe UI is the fallback everywhere else.
@@ -116,34 +135,6 @@ namespace Twinstall.App
             catch (FormatException) { }
             catch (InvalidCastException) { }
             return false;
-        }
-
-        /// <summary>
-        /// The user's chosen accent colour. Stored ABGR, and often too dark or too light to read
-        /// against our own surfaces, so it is nudged into a usable range rather than used raw.
-        /// </summary>
-        private static Color SystemAccent()
-        {
-            Color fallback = FromHex("#7C3AED");
-            try
-            {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM"))
-                {
-                    object v = key?.GetValue("AccentColor");
-                    if (v == null) return fallback;
-
-                    uint abgr = unchecked((uint)Convert.ToInt32(v, CultureInfo.InvariantCulture));
-                    var c = Color.FromArgb((int)(abgr & 0xFF), (int)((abgr >> 8) & 0xFF), (int)((abgr >> 16) & 0xFF));
-
-                    double lum = Luminance(c);
-                    if (IsDark && lum < 0.30) return Lighten(c, 0.35f);
-                    if (!IsDark && lum > 0.70) return Darken(c, 0.30f);
-                    return c;
-                }
-            }
-            catch (System.Security.SecurityException) { return fallback; }
-            catch (FormatException) { return fallback; }
-            catch (InvalidCastException) { return fallback; }
         }
 
         internal static double Luminance(Color c)

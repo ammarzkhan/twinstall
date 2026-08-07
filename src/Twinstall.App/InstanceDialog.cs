@@ -25,9 +25,16 @@ namespace Twinstall.App
         internal Instance Value { get; private set; }
 
         /// <summary>Chrome's profile palette, which is where this visual language comes from.</summary>
+        /// <summary>
+        /// Chrome's profile palette, which is where this visual language comes from.
+        ///
+        /// Cyan used to be in here and was removed: it sat close enough to Twinstall's own teal
+        /// that a badged icon could read as the app's chrome rather than as one of your
+        /// accounts. The badge colours are the signal — nothing else should look like them.
+        /// </summary>
         private static readonly string[] Palette =
         {
-            "#2563EB", "#059669", "#DC2626", "#7C3AED", "#D97706", "#DB2777", "#0891B2", "#4B5563"
+            "#2563EB", "#059669", "#DC2626", "#7C3AED", "#D97706", "#DB2777", "#BE185D", "#4B5563"
         };
 
         private static int _nextColour = 1;

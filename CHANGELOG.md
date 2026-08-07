@@ -25,6 +25,24 @@ saw was four things they could not do yet.
 
 ### Added
 
+- **A logo, and a colour of its own.** The mark is the same rounded tile twice, told apart by
+  colour — which is the product in one shape. `assets/logo.svg` is the source;
+  `scripts/make-logo.ps1` draws the identical geometry with GDI+ and emits the PNG set, a
+  multi-size `.ico`, and the MSIX tile assets, so nothing is hand-drawn or unreproducible.
+
+  The accent is **teal**, chosen against two constraints rather than taste. Twinstall's icon
+  sits in the taskbar directly beside Slack, Discord, VS Code and Claude, and must not read as
+  an official add-on for any of them — so aubergine, blurple and Microsoft blue were out. And
+  the per-account badge colours are the signal this product exists to provide, so the app's own
+  chrome has to stay clear of that palette instead of competing with it. Cyan was dropped from
+  the badge palette for the same reason.
+
+  This replaces following the Windows accent colour. That is the right behaviour for a system
+  utility and the wrong one for something with a brand of its own.
+
+  `assets/twinstall.ico` is the one exception to the repository's no-icons rule. That rule
+  exists to keep *other vendors'* artwork out, and is unchanged for every other case.
+
 - `Twinstall.exe --preview <1-5>` — opens one screen directly with representative data, so a
   layout change can be looked at without clicking through the flow. Seeds nothing, starts
   nothing, applies nothing.
