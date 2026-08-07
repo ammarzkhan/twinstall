@@ -343,7 +343,8 @@ static class Tests
         Check(LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, "x.exe")
                 != LaunchProbe.Explain(ProbeVerdict.NotHonoured, "x.exe"),
               "a blocked launch reads differently from an ignored flag");
-        Check(LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, "x.exe").Contains("Nothing was changed"),
+        Check(LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, "x.exe")
+                .Contains("Nothing was changed", StringComparison.Ordinal),
               "a blocked launch still promises nothing was changed");
 
         Eq(LaunchProbe.Evaluate(dir, null, 1, 30), ProbeVerdict.Invalid, "no file probe is invalid");

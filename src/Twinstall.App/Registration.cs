@@ -270,7 +270,7 @@ namespace Twinstall.App
             {
                 "Write " + AppPaths.ConfigFile,
                 "Compose badged icons into " + AppPaths.IconsDir,
-                "Add a Start-menu shortcut for each instance",
+                "Add a Start-menu shortcut for each account",
                 "Register Twinstall as a candidate handler for " + (cfg?.Scheme ?? "(none)") + "://"
             };
 

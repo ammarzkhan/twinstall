@@ -11,174 +11,156 @@ using Twinstall.Platform;
 
 namespace Twinstall.App
 {
+    internal enum Step { ChooseApp, Result, Accounts, Review, Done }
+
+    /// <summary>
+    /// One job per screen.
+    ///
+    /// The previous version put app selection, a raw detection dump, an empty grid and the
+    /// apply controls on one page, so the first thing a new user saw was four things they
+    /// could not do yet. This walks through them instead, and only ever shows applications
+    /// that are actually installed — a dropdown listing fifteen apps you do not have is not a
+    /// menu, it is a quiz.
+    /// </summary>
     internal sealed class MainForm : Form
     {
-        private readonly ComboBox _preset = new ComboBox();
-        private readonly TextBox _exePath = new TextBox();
-        private readonly Button _detect = new Button();
-        private readonly TextBox _report = new TextBox();
-        private readonly ListView _instances = new ListView();
-        private readonly CheckBox _taskbar = new CheckBox();
+        private readonly Label _title = new Label();
+        private readonly Label _crumb = new Label();
+        private readonly Panel _content = new Panel();
         private readonly Label _status = new Label();
-        private readonly Button _apply = new Button();
+        private readonly FlatButton _back = new FlatButton("Back", ButtonKind.Subtle);
+        private readonly FlatButton _next = new FlatButton("Continue", ButtonKind.Primary);
 
         private readonly AppConfig _config = new AppConfig();
         private DetectionResult _detection;
         private IList<Preset> _presets = new List<Preset>();
+        private readonly List<Preset> _installed = new List<Preset>();
+        private string _chosenExe;
+        private bool _taskbarOptIn;
+        private Step _step = Step.ChooseApp;
 
         internal MainForm()
         {
             Text = "Twinstall";
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(760, 660);
-            MinimumSize = new Size(700, 600);
-            Font = new Font("Segoe UI", 9f);
+            ClientSize = new Size(720, 640);
+            MinimumSize = new Size(660, 600);
+            BackColor = Theme.Background;
+            ForeColor = Theme.Text;
+            Font = Theme.Body;
 
-            BuildAppSection();
-            BuildReportSection();
-            BuildInstanceSection();
-            BuildActionSection();
-
-            Load += (s, e) => Initialise();
+            BuildChrome();
+            Load += (s, e) => { LoadPresets(); Show(_previewStep ?? Step.ChooseApp); };
         }
 
-        // ------------------------------------------------------------- layout --
-        private void BuildAppSection()
+        private Step? _previewStep;
+
+        /// <summary>
+        /// Opens straight onto one screen with representative data, so the layout of every step
+        /// can be looked at without clicking through the whole flow. Development affordance —
+        /// it seeds nothing on disk and applies nothing. Reached only via --preview.
+        /// </summary>
+        internal void PreviewAt(Step step)
         {
-            Controls.Add(Header("1.  Which application?", 14));
-
-            _preset.Location = new Point(20, 44);
-            _preset.Size = new Size(240, 24);
-            _preset.DropDownStyle = ComboBoxStyle.DropDownList;
-            _preset.SelectedIndexChanged += (s, e) => PresetChosen();
-            Controls.Add(_preset);
-
-            _exePath.Location = new Point(272, 44);
-            _exePath.Size = new Size(360, 24);
-            _exePath.PlaceholderText = "Path to the application's .exe";
-            Controls.Add(_exePath);
-
-            var browse = new Button { Text = "Browse...", Location = new Point(640, 43), Size = new Size(100, 26), FlatStyle = FlatStyle.System };
-            browse.Click += (s, e) => Browse();
-            Controls.Add(browse);
-
-            _detect.Text = "Check this app";
-            _detect.Location = new Point(20, 78);
-            _detect.Size = new Size(160, 30);
-            _detect.FlatStyle = FlatStyle.System;
-            _detect.Click += async (s, e) => await DetectAsync().ConfigureAwait(true);
-            Controls.Add(_detect);
-
-            Controls.Add(new Label
+            _previewStep = step;
+            Load += (s, e) =>
             {
-                Text = "This starts the app once with a throwaway profile to prove it really supports them.\r\n"
-                     + "A window will appear and close again.",
-                Location = new Point(190, 78),
-                Size = new Size(560, 34),
-                ForeColor = Color.DimGray
-            });
-        }
+                if (_chosenExe == null && _installed.Count > 0)
+                    _chosenExe = Presets.FindInstalled(_installed[0]);
 
-        private void BuildReportSection()
-        {
-            _report.Location = new Point(20, 118);
-            _report.Size = new Size(720, 168);
-            _report.Multiline = true;
-            _report.ReadOnly = true;
-            _report.ScrollBars = ScrollBars.Vertical;
-            _report.BackColor = Color.White;
-            _report.Font = new Font("Consolas", 9f);
-            _report.Text = "No application checked yet.";
-            Controls.Add(_report);
-        }
+                if (step >= Step.Result && _chosenExe != null)
+                {
+                    // Real detection minus the launch test: genuine data, nothing started.
+                    _detection = Detector.Run(_chosenExe, runProbe: false);
+                    _detection.Probe = ProbeVerdict.Honoured;
+                    _detection.ProbeDetail = "(preview — the launch test was not run)";
+                    _config.ExePath = _detection.ExePath;
+                    _config.Scheme = _detection.Scheme;
+                }
 
-        private void BuildInstanceSection()
-        {
-            Controls.Add(Header("2.  Which accounts?", 298));
+                if (step >= Step.Accounts && _config.Instances.Count == 0)
+                {
+                    string root = _detection?.ProfileRoot ?? @"C:\Users\you\AppData\Roaming";
+                    _config.Instances.Add(new Instance
+                    { Name = "Work", DataDir = PathUtil.Join(root, "Work"), Colour = "#2563EB", Badge = true });
+                    _config.Instances.Add(new Instance
+                    { Name = "Personal", DataDir = PathUtil.Join(root, "Personal"), Colour = "#059669", Badge = true });
+                }
 
-            _instances.Location = new Point(20, 328);
-            _instances.Size = new Size(580, 150);
-            _instances.View = View.Details;
-            _instances.FullRowSelect = true;
-            _instances.GridLines = true;
-            _instances.Columns.Add("Name", 130);
-            _instances.Columns.Add("Profile folder", 350);
-            _instances.Columns.Add("Badge", 80);
-            _instances.DoubleClick += (s, e) => EditInstance();
-            Controls.Add(_instances);
+                if (step == Step.Done) { _lastShortcuts = 2; _lastRegistered = _config.Scheme != null; }
 
-            var add = new Button { Text = "Add", Location = new Point(612, 328), Size = new Size(128, 30), FlatStyle = FlatStyle.System };
-            add.Click += (s, e) => AddInstance();
-            Controls.Add(add);
-
-            var edit = new Button { Text = "Edit", Location = new Point(612, 364), Size = new Size(128, 30), FlatStyle = FlatStyle.System };
-            edit.Click += (s, e) => EditInstance();
-            Controls.Add(edit);
-
-            var remove = new Button { Text = "Remove", Location = new Point(612, 400), Size = new Size(128, 30), FlatStyle = FlatStyle.System };
-            remove.Click += (s, e) => RemoveInstance();
-            Controls.Add(remove);
-        }
-
-        private void BuildActionSection()
-        {
-            Controls.Add(Header("3.  Apply", 492));
-
-            _taskbar.Text = "Also set Windows to never combine taskbar buttons";
-            _taskbar.Location = new Point(20, 522);
-            _taskbar.Size = new Size(400, 22);
-            _taskbar.Checked = Registration.TaskbarNeverCombine();
-            Controls.Add(_taskbar);
-
-            Controls.Add(new Label
-            {
-                Text = "Required for per-window icons. Affects every app on the system and only takes\r\n"
-                     + "effect after you sign out and back in. Off by default, and never changed silently.",
-                Location = new Point(40, 544),
-                Size = new Size(560, 34),
-                ForeColor = Color.DimGray
-            });
-
-            _apply.Text = "Set up Twinstall";
-            _apply.Location = new Point(20, 588);
-            _apply.Size = new Size(190, 34);
-            _apply.FlatStyle = FlatStyle.System;
-            _apply.Click += (s, e) => Apply();
-            Controls.Add(_apply);
-
-            var log = new Button { Text = "Open log", Location = new Point(220, 588), Size = new Size(110, 34), FlatStyle = FlatStyle.System };
-            log.Click += (s, e) => OpenLog();
-            Controls.Add(log);
-
-            var removeAll = new Button { Text = "Remove Twinstall's changes", Location = new Point(490, 588), Size = new Size(250, 34), FlatStyle = FlatStyle.System };
-            removeAll.Click += (s, e) => RemoveEverything();
-            Controls.Add(removeAll);
-
-            _status.Location = new Point(20, 630);
-            _status.Size = new Size(720, 20);
-            _status.ForeColor = Color.DimGray;
-            Controls.Add(_status);
-        }
-
-        private static Label Header(string text, int y)
-        {
-            return new Label
-            {
-                Text = text,
-                Location = new Point(18, y),
-                Size = new Size(600, 24),
-                Font = new Font("Segoe UI", 11f, FontStyle.Bold)
+                Show(step);
             };
         }
 
-        // ------------------------------------------------------------- startup --
-        private void Initialise()
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Theme.ApplyWindowChrome(Handle);
+        }
+
+        // ------------------------------------------------------------- chrome --
+        private void BuildChrome()
+        {
+            _title.Font = Theme.Title;
+            _title.ForeColor = Theme.Text;
+            _title.AutoSize = false;
+            _title.Location = new Point(32, 28);
+            _title.Size = new Size(640, 34);
+            Controls.Add(_title);
+
+            _crumb.Font = Theme.Small;
+            _crumb.ForeColor = Theme.TextMuted;
+            _crumb.AutoSize = false;
+            _crumb.Location = new Point(34, 64);
+            _crumb.Size = new Size(640, 20);
+            Controls.Add(_crumb);
+
+            _content.Location = new Point(32, 96);
+            _content.Size = new Size(656, 448);
+            // A stock Panel has no SupportsTransparentBackColor, so it gets the page colour.
+            _content.BackColor = Theme.Background;
+            _content.AutoScroll = true;
+            Controls.Add(_content);
+
+            _status.Font = Theme.Small;
+            _status.ForeColor = Theme.TextMuted;
+            _status.AutoSize = false;
+            _status.Location = new Point(34, 566);
+            _status.Size = new Size(360, 36);
+            Controls.Add(_status);
+
+            _back.Size = new Size(96, 40);
+            _back.Location = new Point(432, 562);
+            _back.Click += (s, e) => GoBack();
+            Controls.Add(_back);
+
+            _next.Size = new Size(150, 40);
+            _next.Location = new Point(538, 562);
+            _next.Click += (s, e) => GoNext();
+            Controls.Add(_next);
+
+            Resize += (s, e) => Relayout();
+        }
+
+        private void Relayout()
+        {
+            _title.Size = new Size(ClientSize.Width - 64, 34);
+            _crumb.Size = new Size(ClientSize.Width - 64, 20);
+            _content.Size = new Size(ClientSize.Width - 64, ClientSize.Height - 192);
+            int row = ClientSize.Height - 78;
+            _status.Location = new Point(34, row + 4);
+            _status.Size = new Size(ClientSize.Width - 330, 36);
+            _next.Location = new Point(ClientSize.Width - 182, row);
+            _back.Location = new Point(ClientSize.Width - 288, row);
+        }
+
+        private void LoadPresets()
         {
             _presets = Presets.Load();
-            _preset.Items.Add("Choose an app...");
-            foreach (Preset p in _presets) _preset.Items.Add(p.DisplayName);
-            _preset.Items.Add("Something else (Browse)");
-            _preset.SelectedIndex = 0;
+            _installed.Clear();
+            foreach (Preset p in _presets)
+                if (Presets.FindInstalled(p) != null) _installed.Add(p);
 
             AppConfig saved = InstanceConfig.Load(AppPaths.ConfigFile);
             if (!string.IsNullOrWhiteSpace(saved.ExePath))
@@ -187,175 +169,361 @@ namespace Twinstall.App
                 _config.Scheme = saved.Scheme;
                 _config.DefaultDataDir = saved.DefaultDataDir;
                 foreach (Instance i in saved.Instances) _config.Instances.Add(i);
-                _exePath.Text = saved.ExePath;
-                RefreshInstances();
-                Say("Loaded your existing setup. Re-check the app if anything has changed.");
+            }
+            _taskbarOptIn = Registration.TaskbarNeverCombine();
+        }
+
+        // ------------------------------------------------------------ stepping --
+        private void Show(Step step)
+        {
+            _step = step;
+            _content.SuspendLayout();
+            // Panels are rebuilt per step rather than hidden, so the controls have to be
+            // disposed here — they are not the Form's Controls, so nothing else will.
+            foreach (Control c in ToArray(_content.Controls))
+            {
+                _content.Controls.Remove(c);
+                c.Dispose();
+            }
+
+            switch (step)
+            {
+                case Step.ChooseApp: BuildChooseApp(); break;
+                case Step.Result:    BuildResult();    break;
+                case Step.Accounts:  BuildAccounts();  break;
+                case Step.Review:    BuildReview();    break;
+                default:             BuildDone();      break;
+            }
+
+            _content.ResumeLayout();
+            Relayout();
+        }
+
+        /// <summary>
+        /// Rebuilds the page *after* the current event finishes.
+        ///
+        /// Rows and swatches rebuild the page from their own Click handler, and the rebuild
+        /// disposes the control that is still executing that handler. WinForms tolerates that
+        /// unpredictably — the symptom is a page that half-repaints, with the new button text
+        /// but the old contents. Deferring by one message lets the handler return first.
+        /// </summary>
+        private void ShowLater(Step step)
+        {
+            if (IsDisposed || !IsHandleCreated) return;
+            BeginInvoke(new Action(() => Show(step)));
+        }
+
+        private static Control[] ToArray(Control.ControlCollection c)
+        {
+            var list = new List<Control>();
+            foreach (Control x in c) list.Add(x);
+            return list.ToArray();
+        }
+
+        private void Head(string title, string crumb)
+        {
+            _title.Text = title;
+            _crumb.Text = crumb;
+        }
+
+        private void Say(string message) { _status.Text = message; }
+
+        // ------------------------------------------------- step 1: choose app --
+        private void BuildChooseApp()
+        {
+            Head("Run two accounts, side by side", "Step 1 of 4  ·  Choose an app");
+            _back.Visible = false;
+            _next.Text = "Check this app";
+            _next.Enabled = _chosenExe != null;
+
+            int y = 0;
+            if (_installed.Count == 0)
+            {
+                y = AddNote(y, "None of the apps Twinstall knows about were found on this PC. "
+                             + "That is fine — any Chromium or Electron app works. Point it at the .exe.");
             }
             else
             {
-                Say("Pick an application to begin.");
+                y = AddNote(y, "These are installed on this PC. Twinstall will start the one you pick, "
+                             + "once, to make sure it really supports separate accounts.");
+
+                foreach (Preset p in _installed)
+                {
+                    string path = Presets.FindInstalled(p);
+                    var row = new ChoiceRow
+                    {
+                        Title = p.DisplayName,
+                        Subtitle = path,
+                        Width = _content.Width - 24,
+                        Location = new Point(0, y),
+                        Selected = string.Equals(path, _chosenExe, StringComparison.OrdinalIgnoreCase),
+                        Tag2 = path
+                    };
+                    row.Click += (s, e) => ChooseApp((string)((ChoiceRow)s).Tag2);
+                    _content.Controls.Add(row);
+                    y += 68;
+                }
+            }
+
+            var browse = new FlatButton("Choose another app…", ButtonKind.Secondary)
+            {
+                Location = new Point(0, y + 6),
+                Size = new Size(200, 40)
+            };
+            browse.Click += (s, e) => Browse();
+            _content.Controls.Add(browse);
+            y += 58;
+
+            if (_config.Instances.Count > 0)
+            {
+                var remove = new FlatButton("Remove Twinstall's changes", ButtonKind.Danger)
+                {
+                    Location = new Point(0, y + 12),
+                    Size = new Size(230, 38)
+                };
+                remove.Click += (s, e) => RemoveEverything();
+                _content.Controls.Add(remove);
+                Say("Twinstall is already set up for " + (_config.ExePath ?? "an app") + ".");
+            }
+            else
+            {
+                Say(string.Empty);
             }
         }
 
-        private void PresetChosen()
+        private int AddNote(int y, string text)
         {
-            int index = _preset.SelectedIndex - 1;
-            if (index < 0 || index >= _presets.Count) return;
-
-            Preset p = _presets[index];
-            string found = Presets.FindInstalled(p);
-            if (found != null)
+            var note = new Label
             {
-                _exePath.Text = found;
-                Say("Found " + p.DisplayName + ". Now press \"Check this app\".");
-                return;
-            }
+                Text = text,
+                Font = Theme.Body,
+                ForeColor = Theme.TextMuted,
+                AutoSize = false,
+                Location = new Point(2, y),
+                Size = new Size(_content.Width - 28, 44)
+            };
+            _content.Controls.Add(note);
+            return y + 54;
+        }
 
-            // Failing quietly into the status bar is how this looked like "nothing happens
-            // when I click". If we cannot find the app, say so and offer the way forward.
-            Say(p.DisplayName + " was not found automatically.");
-            if (Ui.Confirm(p.DisplayName + " was not found in the usual places.\r\n\r\n"
-                         + "It may be installed somewhere unusual, or not installed at all.\r\n\r\n"
-                         + "Would you like to find its .exe yourself?"))
-            {
-                Browse();
-            }
+        private void ChooseApp(string path)
+        {
+            _chosenExe = path;
+            ShowLater(Step.ChooseApp);
         }
 
         private void Browse()
         {
             using (var dlg = new OpenFileDialog { Filter = "Applications (*.exe)|*.exe", Title = "Choose the application" })
             {
-                if (dlg.ShowDialog(this) == DialogResult.OK) _exePath.Text = dlg.FileName;
+                if (dlg.ShowDialog(this) == DialogResult.OK) ChooseApp(dlg.FileName);
             }
         }
 
-        // ----------------------------------------------------------- detection --
-        private async Task DetectAsync()
+        // ----------------------------------------------------- step 2: result --
+        private async Task RunDetectionAsync()
         {
-            string exe = _exePath.Text.Trim().Trim('"');
+            Head("Checking " + FriendlyName(_chosenExe), "Step 2 of 4  ·  Making sure it works");
+            _step = Step.Result;
+            _content.Controls.Clear();
+            _back.Visible = false;
+            _next.Enabled = false;
+            _next.Text = "Continue";
 
-            if (exe.Length == 0)
-            {
-                Say("No application chosen.");
-                Ui.Error("Choose an application first.\r\n\r\n"
-                       + "Pick one from the list, or use Browse to point at its .exe.");
-                return;
-            }
-            if (!File.Exists(exe))
-            {
-                Say("That file does not exist.");
-                Ui.Error("There is no file at:\r\n\r\n" + exe + "\r\n\r\n"
-                       + "Use Browse to point at the application's .exe.");
-                return;
-            }
-
-            _detect.Enabled = false;
-            _apply.Enabled = false;
-            Say("Checking... a window from the app will appear and close.");
-            _report.Text = "Working...";
+            AddNote(0, "Starting it once with a throwaway profile. A window will appear and close again — "
+                     + "that is the test, and nothing on your PC has been changed yet.");
+            Say("Working…");
             UseWaitCursor = true;
 
+            string exe = _chosenExe;
             DetectionResult result = await Task.Run(() => Detector.Run(exe, runProbe: true)).ConfigureAwait(true);
 
             UseWaitCursor = false;
-            _detect.Enabled = true;
-            _apply.Enabled = true;
             _detection = result;
-            _report.Text = Describe(result);
 
-            if (result.Probe != ProbeVerdict.Honoured)
+            if (result.Probe == ProbeVerdict.Honoured)
             {
-                Say("This app cannot run separate instances. Nothing has been changed.");
-                return;
-            }
+                _config.ExePath = result.ExePath;
+                _config.Scheme = result.Scheme;
+                _config.DefaultDataDir = result.Profiles?.Best?.Directory;
 
-            _config.ExePath = result.ExePath;
-            _config.Scheme = result.Scheme;
-            _config.DefaultDataDir = result.Profiles?.Best?.Directory;
-
-            if (_config.Instances.Count == 0 && result.Profiles?.Best != null)
-            {
-                // The profile that already exists becomes the first instance, so the account
-                // the user is signed into keeps working exactly as it did.
-                _config.Instances.Add(new Instance
+                if (_config.Instances.Count == 0 && result.Profiles?.Best != null)
                 {
-                    Name = result.Profiles.Best.Name,
-                    DataDir = result.Profiles.Best.Directory,
-                    Colour = "#2563EB",
-                    Badge = true
-                });
-                RefreshInstances();
-            }
-
-            Say("Supported. Add a second account below, then apply.");
-        }
-
-        private static string Describe(DetectionResult r)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("Application   : " + r.ExePath);
-            if (r.StubResolved) sb.AppendLine("                (resolved from a launcher stub)");
-
-            sb.AppendLine("Chromium      : " + r.MarkerScore.ToString(CultureInfo.InvariantCulture)
-                          + " markers -> " + (r.IsChromium ? "yes" : "NO"));
-            if (r.IsChromium && !string.IsNullOrEmpty(r.MarkerDirectory))
-                sb.AppendLine("                markers in " + r.MarkerDirectory);
-
-            sb.AppendLine("Packaged      : " + (r.Packaged ? "yes (Microsoft Store)" : "no"));
-            sb.AppendLine("Profile root  : " + r.ProfileRoot);
-
-            if (r.Profiles != null)
-            {
-                sb.AppendLine("Existing      : " + r.Profiles.Outcome
-                              + (r.Profiles.Best != null ? "  -> " + r.Profiles.Best.Name : string.Empty));
-                if (r.Profiles.Outcome == ProfileDiscoveryOutcome.Ambiguous)
-                    sb.AppendLine("                several candidates - check the folder below is right");
-            }
-
-            if (r.Schemes != null && r.Schemes.Count > 0)
-            {
-                foreach (SchemeRegistration s in r.Schemes)
-                {
-                    sb.AppendLine("Scheme        : " + s.Scheme + "://   currently handled by: " + OwnerText(s));
-                    if (s.Owner == SchemeOwner.Foreign)
-                        sb.AppendLine("                " + (s.Command ?? string.Empty));
+                    _config.Instances.Add(new Instance
+                    {
+                        Name = result.Profiles.Best.Name,
+                        DataDir = result.Profiles.Best.Directory,
+                        Colour = "#2563EB",
+                        Badge = true
+                    });
                 }
             }
-            else
-            {
-                sb.AppendLine("Scheme        : none found - this app does not use browser sign-in,");
-                sb.AppendLine("                so separate profiles will work but no routing is needed.");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine("Launch test   : " + r.Probe);
-            sb.AppendLine("                " + r.ProbeDetail);
-            return sb.ToString();
+            Show(Step.Result);
         }
 
-        private static string OwnerText(SchemeRegistration s)
+        private void BuildResult()
         {
-            switch (s.Owner)
+            DetectionResult r = _detection;
+            bool ok = r != null && r.Probe == ProbeVerdict.Honoured;
+            string appName = FriendlyName(r?.ExePath ?? _chosenExe);
+
+            Head(ok ? appName + " can do this" : appName + " cannot do this",
+                 "Step 2 of 4  ·  Result");
+
+            _back.Visible = true;
+            _next.Visible = ok;
+            _next.Text = "Set up accounts";
+            _next.Enabled = ok;
+
+            int y = 0;
+            var summary = new Label
             {
-                case SchemeOwner.Direct: return "the app itself";
-                case SchemeOwner.SamePackage: return "the app's own package";
-                case SchemeOwner.Foreign: return "ANOTHER PROGRAM";
-                default: return s.DeclaredByPackage ? "nothing yet" : "unknown";
+                Text = ok
+                    ? "It created a separate profile where it was told to, so two accounts will work."
+                    : LaunchProbe.Explain(r?.Probe ?? ProbeVerdict.Invalid, appName),
+                Font = Theme.Body,
+                ForeColor = ok ? Theme.Text : Theme.Bad,
+                AutoSize = false,
+                Location = new Point(2, y),
+                Size = new Size(_content.Width - 28, 48)
+            };
+            _content.Controls.Add(summary);
+            y += 58;
+
+            if (r != null)
+            {
+                y = AddFact(y, r.IsChromium, r.IsChromium
+                    ? "Built on Chromium, so it supports separate profiles"
+                    : "Not a Chromium or Electron app — separate profiles are not possible");
+
+                if (r.StubResolved)
+                    y = AddFact(y, true, "Found the real program behind the launcher shortcut");
+
+                if (r.Profiles != null && r.Profiles.Best != null)
+                    y = AddFact(y, true, "Your existing account lives in “" + r.Profiles.Best.Name + "”");
+
+                if (!string.IsNullOrEmpty(r.Scheme))
+                    y = AddFact(y, true, "Sign-in links use " + r.Scheme + ":// — Twinstall can route those");
+                else
+                    y = AddFact(y, true, "No sign-in links to route — profiles alone are enough");
+
+                y = AddFact(y, ok, ok ? "Separate profiles confirmed by actually running it"
+                                      : "The profile test did not pass");
             }
+
+            var details = new FlatButton("Technical details", ButtonKind.Subtle)
+            {
+                Location = new Point(-6, y + 8),
+                Size = new Size(150, 32)
+            };
+            var dump = new TextBox
+            {
+                Multiline = true,
+                ReadOnly = true,
+                ScrollBars = ScrollBars.Vertical,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Theme.SurfaceAlt,
+                ForeColor = Theme.TextMuted,
+                Font = Theme.Mono,
+                Location = new Point(0, y + 46),
+                Size = new Size(_content.Width - 26, 150),
+                Visible = false,
+                Text = Describe(r)
+            };
+            details.Click += (s, e) => { dump.Visible = !dump.Visible; };
+            _content.Controls.Add(details);
+            _content.Controls.Add(dump);
+
+            Say(ok ? "Nothing has been changed yet." : "Nothing was changed.");
         }
 
-        // ----------------------------------------------------------- instances --
-        private void RefreshInstances()
+        private int AddFact(int y, bool good, string text)
         {
-            _instances.Items.Clear();
-            foreach (Instance i in _config.Instances)
+            var f = new FactRow(text, good) { Location = new Point(2, y), Width = _content.Width - 28 };
+            _content.Controls.Add(f);
+            return y + 30;
+        }
+
+        // --------------------------------------------------- step 3: accounts --
+        private void BuildAccounts()
+        {
+            Head("Your accounts", "Step 3 of 4  ·  Name them and pick colours");
+            _back.Visible = true;
+            _next.Visible = true;
+            _next.Text = "Review changes";
+            _next.Enabled = _config.Instances.Count >= 2;
+
+            int y = AddNote(0, "Each one gets its own profile folder and its own badged taskbar icon. "
+                             + "The first is the account you already use.");
+
+            foreach (Instance inst in _config.Instances)
             {
-                var row = new ListViewItem(i.Name);
-                row.SubItems.Add(i.DataDir);
-                row.SubItems.Add(i.Badge ? "yes" : "no");
-                _instances.Items.Add(row);
+                Instance captured = inst;
+                var row = new ChoiceRow
+                {
+                    Title = inst.Name,
+                    Subtitle = inst.DataDir,
+                    Dot = Theme.FromHex(inst.Colour),
+                    Width = _content.Width - 24,
+                    Location = new Point(0, y),
+                    Tag2 = captured
+                };
+                row.Click += (s, e) => BeginInvoke(new Action(() => EditInstance(captured)));
+                _content.Controls.Add(row);
+                y += 68;
             }
+
+            var add = new FlatButton("Add an account", ButtonKind.Secondary)
+            {
+                Location = new Point(0, y + 6),
+                Size = new Size(170, 40)
+            };
+            add.Click += (s, e) => AddInstance();
+            _content.Controls.Add(add);
+
+            if (_config.Instances.Count > 1)
+            {
+                var del = new FlatButton("Remove last", ButtonKind.Subtle)
+                {
+                    Location = new Point(180, y + 6),
+                    Size = new Size(130, 40)
+                };
+                del.Click += (s, e) =>
+                {
+                    _config.Instances.RemoveAt(_config.Instances.Count - 1);
+                    ShowLater(Step.Accounts);
+                };
+                _content.Controls.Add(del);
+            }
+
+            Say(_config.Instances.Count < 2
+                ? "Add a second account — that is the point of Twinstall."
+                : "Click an account to rename it or change its colour.");
+        }
+
+        private void AddInstance()
+        {
+            using (var dlg = new InstanceDialog(null, _detection?.ProfileRoot, ExistingProfileDir()))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
+                if (!EnsureIsolated(dlg.Value, null)) return;
+                _config.Instances.Add(dlg.Value);
+            }
+            Show(Step.Accounts);
+        }
+
+        private void EditInstance(Instance existing)
+        {
+            int index = _config.Instances.IndexOf(existing);
+            if (index < 0) return;
+
+            using (var dlg = new InstanceDialog(existing, _detection?.ProfileRoot, ExistingProfileDir()))
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
+                if (!EnsureIsolated(dlg.Value, existing)) return;
+                _config.Instances[index] = dlg.Value;
+            }
+            Show(Step.Accounts);
         }
 
         private string ExistingProfileDir()
@@ -363,81 +531,28 @@ namespace Twinstall.App
             return _config.Instances.Count > 0 ? _config.Instances[0].DataDir : _config.DefaultDataDir;
         }
 
-        private void AddInstance()
-        {
-            if (string.IsNullOrWhiteSpace(_config.ExePath))
-            {
-                Say("Check an application first.");
-                Ui.Error("Check an application first.\r\n\r\n"
-                       + "Twinstall needs to know that the app really supports separate "
-                       + "profiles, and where it keeps them, before it can offer to add one. "
-                       + "Press \"Check this app\" in step 1.");
-                return;
-            }
-
-            using (var dlg = new InstanceDialog(null, _detection?.ProfileRoot, ExistingProfileDir()))
-            {
-                if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
-                if (!EnsureIsolated(dlg.Value, -1)) return;
-                _config.Instances.Add(dlg.Value);
-            }
-            RefreshInstances();
-        }
-
-        private void EditInstance()
-        {
-            int index = SelectedIndex();
-            if (index < 0)
-            {
-                Say("Select a row first.");
-                return;
-            }
-
-            using (var dlg = new InstanceDialog(_config.Instances[index], _detection?.ProfileRoot, ExistingProfileDir()))
-            {
-                if (dlg.ShowDialog(this) != DialogResult.OK || dlg.Value == null) return;
-                if (!EnsureIsolated(dlg.Value, index)) return;
-                _config.Instances[index] = dlg.Value;
-            }
-            RefreshInstances();
-        }
-
-        private void RemoveInstance()
-        {
-            int index = SelectedIndex();
-            if (index < 0) return;
-            _config.Instances.RemoveAt(index);
-            RefreshInstances();
-        }
-
-        private int SelectedIndex()
-        {
-            return _instances.SelectedIndices.Count == 0 ? -1 : _instances.SelectedIndices[0];
-        }
-
         /// <summary>
-        /// No two instances may share or nest their profile folders. This is the guarantee the
-        /// whole product rests on, so it is enforced here and not merely suggested.
+        /// No two accounts may share or nest their profile folders. This is the guarantee the
+        /// whole product rests on, so it is enforced rather than suggested.
         /// </summary>
-        private bool EnsureIsolated(Instance candidate, int ignoreIndex)
+        private bool EnsureIsolated(Instance candidate, Instance ignoring)
         {
-            for (int i = 0; i < _config.Instances.Count; i++)
+            foreach (Instance other in _config.Instances)
             {
-                if (i == ignoreIndex) continue;
-                Instance other = _config.Instances[i];
+                if (ReferenceEquals(other, ignoring)) continue;
 
                 if (string.Equals(other.Name, candidate.Name, StringComparison.OrdinalIgnoreCase))
                 {
-                    Ui.Error("There is already an instance called \"" + candidate.Name + "\".");
+                    Ui.Error("There is already an account called “" + candidate.Name + "”.");
                     return false;
                 }
 
                 var issues = IsolationCheck.Validate(other.DataDir, candidate.DataDir);
                 if (issues.Count > 0)
                 {
-                    Ui.Error("These two instances would not be isolated from each other:\r\n\r\n"
-                           + "  " + other.Name + "  ->  " + other.DataDir + "\r\n"
-                           + "  " + candidate.Name + "  ->  " + candidate.DataDir + "\r\n\r\n"
+                    Ui.Error("These two accounts would not be kept separate:\r\n\r\n"
+                           + "  " + other.Name + "  →  " + other.DataDir + "\r\n"
+                           + "  " + candidate.Name + "  →  " + candidate.DataDir + "\r\n\r\n"
                            + issues[0] + ".");
                     return false;
                 }
@@ -445,23 +560,65 @@ namespace Twinstall.App
             return true;
         }
 
-        // --------------------------------------------------------------- apply --
-        private void Apply()
+        // ----------------------------------------------------- step 4: review --
+        private void BuildReview()
         {
-            if (string.IsNullOrWhiteSpace(_config.ExePath)) { Say("Check an application first."); return; }
-            if (_config.Instances.Count < 2)
+            Head("Ready when you are", "Step 4 of 4  ·  What will change");
+            _back.Visible = true;
+            _next.Visible = true;
+            _next.Text = "Set up Twinstall";
+            _next.Enabled = true;
+
+            int y = AddNote(0, "Everything below is per-user. No administrator prompt, nothing outside your "
+                             + "own profile, and all of it can be undone from this window.");
+
+            foreach (string line in Registration.DescribeChanges(_config, _taskbarOptIn))
             {
-                Ui.Error("Add at least two instances — that is the point of Twinstall.");
-                return;
+                var l = new Label
+                {
+                    Text = "•   " + line,
+                    Font = Theme.Body,
+                    ForeColor = Theme.Text,
+                    AutoSize = false,
+                    Location = new Point(4, y),
+                    Size = new Size(_content.Width - 30, 34)
+                };
+                _content.Controls.Add(l);
+                y += 36;
             }
 
-            var summary = new StringBuilder("Twinstall will:\r\n\r\n");
-            foreach (string line in Registration.DescribeChanges(_config, _taskbar.Checked))
-                summary.Append("  •  ").Append(line).Append("\r\n");
-            summary.Append("\r\nGo ahead?");
+            var taskbar = new CheckBox
+            {
+                Text = "  Also set Windows to never combine taskbar buttons",
+                Font = Theme.Body,
+                ForeColor = Theme.Text,
+                BackColor = Theme.Background,
+                Checked = _taskbarOptIn,
+                AutoSize = false,
+                FlatStyle = FlatStyle.Standard,
+                Location = new Point(2, y + 14),
+                Size = new Size(_content.Width - 30, 26)
+            };
+            taskbar.CheckedChanged += (s, e) => { _taskbarOptIn = taskbar.Checked; Show(Step.Review); };
+            _content.Controls.Add(taskbar);
 
-            if (!Ui.Confirm(summary.ToString())) return;
+            var caveat = new Label
+            {
+                Text = "Needed for per-window icons. It affects every app on the system and only takes "
+                     + "effect after you sign out and back in. Off by default, never changed silently.",
+                Font = Theme.Small,
+                ForeColor = Theme.TextMuted,
+                AutoSize = false,
+                Location = new Point(24, y + 42),
+                Size = new Size(_content.Width - 52, 40)
+            };
+            _content.Controls.Add(caveat);
 
+            Say(string.Empty);
+        }
+
+        private void Apply()
+        {
             try
             {
                 AppPaths.EnsureHome();
@@ -473,40 +630,177 @@ namespace Twinstall.App
 
             int icons = Router.ComposeIcons(_config);
             int shortcuts = Registration.CreateShortcuts(_config);
+            bool registered = !string.IsNullOrWhiteSpace(_config.Scheme)
+                              && Registration.RegisterProtocol(_config.Scheme);
 
-            bool registered = false;
-            if (!string.IsNullOrWhiteSpace(_config.Scheme))
-                registered = Registration.RegisterProtocol(_config.Scheme);
+            if (_taskbarOptIn != Registration.TaskbarNeverCombine())
+                Registration.SetTaskbarNeverCombine(_taskbarOptIn);
 
-            if (_taskbar.Checked != Registration.TaskbarNeverCombine())
-                Registration.SetTaskbarNeverCombine(_taskbar.Checked);
-
-            Log.Write("setup applied: " + _config.Instances.Count + " instances, "
+            Log.Write("setup applied: " + _config.Instances.Count + " accounts, "
                       + icons + " icons, " + shortcuts + " shortcuts");
 
-            var done = new StringBuilder("Twinstall is set up.\r\n\r\n");
-            done.Append("Start-menu shortcuts: ").Append(shortcuts.ToString(CultureInfo.InvariantCulture)).Append("\r\n");
-            done.Append("Badged icons: ").Append(icons.ToString(CultureInfo.InvariantCulture)).Append("\r\n\r\n");
+            _lastShortcuts = shortcuts;
+            _lastRegistered = registered;
+            Show(Step.Done);
+        }
 
-            if (registered)
+        private int _lastShortcuts;
+        private bool _lastRegistered;
+
+        // ------------------------------------------------------- step 5: done --
+        private void BuildDone()
+        {
+            Head("You're set up", "All done");
+            _back.Visible = false;
+            _next.Visible = true;
+            _next.Text = "Finish";
+            _next.Enabled = true;
+
+            int y = AddNote(0, _lastShortcuts + " shortcut(s) added to your Start menu — one per account. "
+                             + "Open the second one and sign in as usual.");
+
+            if (_lastRegistered)
             {
-                done.Append("One last step, and it has to be you: Windows only lets *you* choose a\r\n");
-                done.Append("default handler. Settings will open now — find ").Append(_config.Scheme);
-                done.Append(":// and choose Twinstall.\r\n\r\n");
+                y = AddFact(y, true, "Twinstall is registered as a handler for " + _config.Scheme + "://");
+                var note = new Label
+                {
+                    Text = "One last step, and it has to be you: Windows only lets you choose a default "
+                         + "handler yourself. Open Settings, find " + _config.Scheme + ":// and pick Twinstall.",
+                    Font = Theme.Body,
+                    ForeColor = Theme.Text,
+                    AutoSize = false,
+                    Location = new Point(2, y + 8),
+                    Size = new Size(_content.Width - 30, 48)
+                };
+                _content.Controls.Add(note);
+                y += 62;
+
+                var open = new FlatButton("Open Default apps settings", ButtonKind.Secondary)
+                {
+                    Location = new Point(0, y),
+                    Size = new Size(230, 40)
+                };
+                open.Click += (s, e) => Registration.OpenDefaultAppsSettings();
+                _content.Controls.Add(open);
+                y += 52;
             }
-            if (_taskbar.Checked)
-                done.Append("The taskbar setting takes effect after you sign out and back in.\r\n\r\n");
 
-            done.Append("Then open your second account from the Start menu.");
-            Ui.Info(done.ToString());
+            if (_taskbarOptIn)
+                y = AddFact(y, true, "The taskbar setting applies after you sign out and back in");
 
-            if (registered) Registration.OpenDefaultAppsSettings();
-            Say("Set up. " + shortcuts + " shortcut(s) created.");
+            var log = new FlatButton("Open log", ButtonKind.Subtle)
+            {
+                Location = new Point(-6, y + 8),
+                Size = new Size(110, 34)
+            };
+            log.Click += (s, e) => OpenLog();
+            _content.Controls.Add(log);
+
+            Say("Everything Twinstall changed can be undone from the first screen.");
+        }
+
+        // ---------------------------------------------------------- navigation --
+        private async void GoNext()
+        {
+            switch (_step)
+            {
+                case Step.ChooseApp:
+                    if (_chosenExe == null || !File.Exists(_chosenExe))
+                    {
+                        Ui.Error("Choose an application first — pick one from the list, or use "
+                               + "“Choose another app…” to point at its .exe.");
+                        return;
+                    }
+                    await RunDetectionAsync().ConfigureAwait(true);
+                    break;
+
+                case Step.Result:   Show(Step.Accounts); break;
+                case Step.Accounts:
+                    if (_config.Instances.Count < 2)
+                    {
+                        Ui.Error("Add a second account first — running two at once is the point.");
+                        return;
+                    }
+                    Show(Step.Review);
+                    break;
+                case Step.Review:   Apply(); break;
+                default:            Close(); break;
+            }
+        }
+
+        private void GoBack()
+        {
+            switch (_step)
+            {
+                case Step.Result:   Show(Step.ChooseApp); break;
+                case Step.Accounts: Show(Step.Result);    break;
+                case Step.Review:   Show(Step.Accounts);  break;
+                default:            Show(Step.ChooseApp); break;
+            }
+        }
+
+        // ------------------------------------------------------------- helpers --
+        /// <summary>
+        /// A name fit to put in a heading. The executable's file name is not it: Slack's is
+        /// "slack.exe", which renders as "slack can do this". Preferred order is the preset's
+        /// display name, then the binary's own ProductName, then the file name capitalised.
+        /// </summary>
+        private string FriendlyName(string exePath)
+        {
+            if (string.IsNullOrWhiteSpace(exePath)) return "The app";
+
+            foreach (Preset p in _presets)
+            {
+                string found = Presets.FindInstalled(p);
+                if (found != null && PathUtil.SamePath(found, exePath)) return p.DisplayName;
+            }
+
+            try
+            {
+                if (File.Exists(exePath))
+                {
+                    string product = System.Diagnostics.FileVersionInfo.GetVersionInfo(exePath).ProductName;
+                    if (!string.IsNullOrWhiteSpace(product)) return product.Trim();
+                }
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+
+            string name = Path.GetFileNameWithoutExtension(exePath);
+            if (string.IsNullOrEmpty(name)) return "The app";
+            return char.ToUpperInvariant(name[0]) + name.Substring(1);
+        }
+
+        private static string Describe(DetectionResult r)
+        {
+            if (r == null) return "(nothing)";
+            var sb = new StringBuilder();
+            sb.AppendLine("executable   : " + r.ExePath);
+            if (r.StubResolved) sb.AppendLine("               (resolved from a launcher stub)");
+            sb.AppendLine("chromium     : " + r.MarkerScore.ToString(CultureInfo.InvariantCulture) + " markers");
+            if (!string.IsNullOrEmpty(r.MarkerDirectory)) sb.AppendLine("markers in   : " + r.MarkerDirectory);
+            sb.AppendLine("packaged     : " + r.Packaged);
+            sb.AppendLine("profile root : " + r.ProfileRoot);
+            if (r.Profiles != null)
+            {
+                sb.AppendLine("profiles     : " + r.Profiles.Outcome + " of "
+                              + r.Profiles.Ranked.Count.ToString(CultureInfo.InvariantCulture) + " candidates");
+                foreach (RankedProfile p in r.Profiles.Ranked)
+                    sb.AppendLine("               " + (p.NameMatched ? "* " : "  ") + p.Candidate.Name);
+            }
+            if (r.Schemes != null)
+                foreach (SchemeRegistration s in r.Schemes)
+                    sb.AppendLine("scheme       : " + s.Scheme + "://  owner=" + s.Owner
+                                  + " declaredByPackage=" + s.DeclaredByPackage
+                                  + (s.Command == null ? string.Empty : "\r\n               " + s.Command));
+            sb.AppendLine("launch test  : " + r.Probe);
+            sb.AppendLine("               " + r.ProbeDetail);
+            return sb.ToString();
         }
 
         private void RemoveEverything()
         {
-            if (!Ui.Confirm("Remove Twinstall's shortcuts, icons, registry entries and configuration?\r\n\r\n"
+            if (!Ui.Confirm("Remove Twinstall's shortcuts, icons, registry entries and settings?\r\n\r\n"
                           + "Your profile folders and everything signed into them are NOT touched — "
                           + "delete those yourself if you want them gone."))
                 return;
@@ -524,11 +818,9 @@ namespace Twinstall.App
             catch (UnauthorizedAccessException ex) { Log.Write("cleanup: " + ex.Message); }
 
             _config.Instances.Clear();
-            RefreshInstances();
-            Say("Removed. Your profile folders were left alone.");
-            Ui.Info("Twinstall's changes are gone.\r\n\r\n"
-                  + "Windows may still list Twinstall under Default apps until you pick something else there.\r\n\r\n"
-                  + "Your profile folders were left untouched.");
+            _config.ExePath = null;
+            Show(Step.ChooseApp);
+            Ui.Info("Twinstall's changes are gone.\r\n\r\nYour profile folders were left untouched.");
         }
 
         private void OpenLog()
@@ -541,11 +833,6 @@ namespace Twinstall.App
             }
             catch (System.ComponentModel.Win32Exception ex) { Say("Could not open the log: " + ex.Message); }
             catch (InvalidOperationException ex) { Say("Could not open the log: " + ex.Message); }
-        }
-
-        private void Say(string message)
-        {
-            _status.Text = message;
         }
     }
 }

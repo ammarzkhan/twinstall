@@ -4,6 +4,31 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Changed — the management UI
+
+Rebuilt as a four-step flow instead of one page. The old window showed app selection, a raw
+detection dump, an empty grid and the apply controls all at once, so the first thing a new user
+saw was four things they could not do yet.
+
+- **Only apps that are actually installed are offered.** A dropdown listing twenty apps, fifteen
+  of which you do not have, is not a menu — it is a quiz. The list is now built by resolving
+  every preset against this machine.
+- **Results are in plain language**, as ticked statements — "Built on Chromium, so it supports
+  separate profiles", "Sign-in links use slack:// — Twinstall can route those" — with the
+  technical dump moved behind a *Technical details* toggle for when it is wanted.
+- **Follows the system theme**, light or dark, including the title bar, and uses the user's own
+  Windows accent colour rather than a hard-coded brand colour.
+- Accounts are shown as rows with their badge colour, not a grey grid; the colour picker is
+  swatches rather than a system colour dialog.
+- Headings use the app's real name. `Path.GetFileNameWithoutExtension` produced "slack can do
+  this"; it now prefers the preset's display name, then the binary's `ProductName`.
+
+### Added
+
+- `Twinstall.exe --preview <1-5>` — opens one screen directly with representative data, so a
+  layout change can be looked at without clicking through the flow. Seeds nothing, starts
+  nothing, applies nothing.
+
 ### Fixed
 
 - **Preset lookup failed for every Microsoft Store app.** A normal application cannot *list*

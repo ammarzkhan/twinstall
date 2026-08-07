@@ -79,6 +79,21 @@ namespace Twinstall.App
                 }
 
                 ApplicationConfiguration.Initialize();
+
+                // --preview <1-5> opens one screen directly with representative data. It exists
+                // so the layout can be reviewed without clicking through the flow; it seeds
+                // nothing on disk, starts no application, and applies nothing.
+                if (argv != null && argv.Length > 1
+                    && string.Equals(argv[0], "--preview", StringComparison.OrdinalIgnoreCase)
+                    && int.TryParse(argv[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int which)
+                    && which >= 1 && which <= 5)
+                {
+                    var preview = new MainForm();
+                    preview.PreviewAt((Step)(which - 1));
+                    Application.Run(preview);
+                    return 0;
+                }
+
                 Application.Run(new MainForm());
                 return 0;
             }
