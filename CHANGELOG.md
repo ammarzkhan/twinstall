@@ -2,7 +2,7 @@
 
 Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.3.0] — 2026-08-07
 
 ### Added — it is one file now, and it installs itself
 
@@ -170,7 +170,7 @@ one step that matters was the one the app was quietest about.
   describe an app's own account-switching UI, not whether it honours `--user-data-dir` — which is
   a different question, and the reason this project exists.
 
-## [0.3.0] — 2026-08-07
+### Earlier in this release
 
 First version that is an application rather than a library. Everything below has been run on
 real Windows against real installations of Claude (Microsoft Store), Slack and VS Code.
