@@ -62,15 +62,98 @@ namespace Twinstall.Platform
         public static void Compose(Image source, string outputIcoPath, string hexColour, string label, Image avatar)
         {
             var frames = new List<Bitmap>();
+            Bitmap trimmed = null;
             try
             {
-                foreach (int size in IconSizes) frames.Add(Render(source, size, hexColour, label, avatar));
+                trimmed = Trim(source);
+                Image logo = trimmed ?? source;
+                foreach (int size in IconSizes) frames.Add(Render(logo, size, hexColour, label, avatar));
                 WriteIco(frames, outputIcoPath);
             }
             finally
             {
                 foreach (Bitmap b in frames) b.Dispose();
+                trimmed?.Dispose();
             }
+        }
+
+        /// <summary>
+        /// Crops a logo to its visible pixels, or returns null when there is nothing to trim.
+        ///
+        /// This is what makes the badge work for applications other than the one it was tuned
+        /// on. Icons are not all edge-to-edge squares: plenty are a circle, a rounded square, or
+        /// a wordmark sitting in a transparent canvas with generous padding. Without trimming,
+        /// the badge is positioned against the *canvas* corner, so for a padded logo it drifts
+        /// out into empty space and looks detached — the padding is invisible, so the result
+        /// just looks like a mistake.
+        ///
+        /// Measured against the visible artwork instead, the disc overlaps the logo's corner
+        /// whatever shape it is, and the logo also gets to fill more of the icon.
+        /// </summary>
+        private static Bitmap Trim(Image source)
+        {
+            if (source == null) return null;
+
+            Bitmap owned = null;
+            try
+            {
+                var bmp = source as Bitmap;
+                if (bmp == null || bmp.PixelFormat != PixelFormat.Format32bppArgb)
+                {
+                    owned = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+                    using (var g = Graphics.FromImage(owned)) g.DrawImage(source, 0, 0, source.Width, source.Height);
+                    bmp = owned;
+                }
+
+                Rectangle ink = OpaqueBounds(bmp);
+                if (ink.Width <= 0 || ink.Height <= 0) return null;
+
+                // Nothing meaningful to gain from a crop of a few pixels.
+                if (ink.Width >= bmp.Width - 2 && ink.Height >= bmp.Height - 2) return null;
+
+                var cropped = new Bitmap(ink.Width, ink.Height, PixelFormat.Format32bppArgb);
+                using (var g = Graphics.FromImage(cropped))
+                {
+                    g.DrawImage(bmp, new Rectangle(0, 0, ink.Width, ink.Height), ink, GraphicsUnit.Pixel);
+                }
+                return cropped;
+            }
+            catch (ArgumentException) { return null; }
+            finally { owned?.Dispose(); }
+        }
+
+        /// <summary>Bounding box of pixels that are not effectively transparent.</summary>
+        private static Rectangle OpaqueBounds(Bitmap bmp)
+        {
+            const byte Threshold = 12;   // ignore near-invisible antialiasing fringe
+            int minX = bmp.Width, minY = bmp.Height, maxX = -1, maxY = -1;
+
+            BitmapData data = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+                                           ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+            try
+            {
+                // Copied out rather than read through a pointer, so the project does not need
+                // AllowUnsafeBlocks for one loop over at most 256x256 pixels.
+                var buffer = new byte[Math.Abs(data.Stride) * bmp.Height];
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0, buffer, 0, buffer.Length);
+
+                for (int y = 0; y < bmp.Height; y++)
+                {
+                    int row = y * data.Stride;
+                    for (int x = 0; x < bmp.Width; x++)
+                    {
+                        if (buffer[row + (x * 4) + 3] <= Threshold) continue;   // BGRA, alpha last
+                        if (x < minX) minX = x;
+                        if (x > maxX) maxX = x;
+                        if (y < minY) minY = y;
+                        if (y > maxY) maxY = y;
+                    }
+                }
+            }
+            finally { bmp.UnlockBits(data); }
+
+            if (maxX < minX || maxY < minY) return Rectangle.Empty;
+            return new Rectangle(minX, minY, maxX - minX + 1, maxY - minY + 1);
         }
 
         /// <summary>
@@ -96,10 +179,19 @@ namespace Twinstall.Platform
                 // Insetting only two edges keeps the logo as large as that allows — it is not
                 // scaled down uniformly, which is what cost resolution before.
                 float margin = size * 0.13f;
-                float logo = size - margin;
+                float box = size - margin;
 
                 if (source != null)
-                    g.DrawImage(source, 0, margin, logo, logo);
+                {
+                    // Preserve aspect and align to the box's TOP-RIGHT. Extracted app icons are
+                    // square, so for almost every app this fills the box and nothing moves. It
+                    // matters for the ones that aren't — a wordmark or a wide logo — where
+                    // centring would drop the artwork away from the corner and leave the badge
+                    // overlapping nothing.
+                    float scale = Math.Min(box / source.Width, box / source.Height);
+                    float w = source.Width * scale, h = source.Height * scale;
+                    g.DrawImage(source, box - w, margin, w, h);
+                }
 
                 // Flush to the canvas corner, so it clears the logo's square on two sides.
                 float d = size * 0.62f;
