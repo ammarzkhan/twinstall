@@ -88,17 +88,23 @@ namespace Twinstall.Platform
                 g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
                 g.Clear(Color.Transparent);
 
-                // The application's logo is drawn at FULL size and the badge overlaps its
-                // top-right corner. The badge used to be given room by shrinking the logo,
-                // which threw away resolution to make space for something drawn on top of the
-                // space anyway — the logo looked soft for no gain. Overlapping costs nothing.
-                if (source != null)
-                    g.DrawImage(source, 0, 0, size, size);
+                // The logo is anchored bottom-LEFT and inset only along the top and right, so
+                // the badge can overhang the corner of its square rather than sit inside it.
+                //
+                // A disc contained entirely within the app's own rounded square reads as a
+                // sticker placed on the icon; one that breaks the outline reads as part of it.
+                // Insetting only two edges keeps the logo as large as that allows — it is not
+                // scaled down uniformly, which is what cost resolution before.
+                float margin = size * 0.13f;
+                float logo = size - margin;
 
-                float ring = Math.Max(1f, size * 0.055f);
-                float d = size * 0.60f;
-                float x = size - d - (ring / 2f);      // the ring strokes centred on the edge,
-                float y = ring / 2f;                   // so half of it sits outside the circle
+                if (source != null)
+                    g.DrawImage(source, 0, margin, logo, logo);
+
+                // Flush to the canvas corner, so it clears the logo's square on two sides.
+                float d = size * 0.62f;
+                float x = size - d;
+                float y = 0f;
                 float cx = x + (d / 2f), cy = y + (d / 2f);
 
                 Color colour = ParseColour(hexColour);
@@ -127,11 +133,9 @@ namespace Twinstall.Platform
                         DrawCentredGlyph(g, label.Substring(0, 1).ToUpperInvariant(), d, cx, cy);
                 }
 
-                // One stroked ellipse, not two filled ones. Filling a larger white circle and a
-                // smaller coloured circle over it leaves two independently anti-aliased edges
-                // meeting in the middle, which is what made the ring look ragged at desktop
-                // size. A single stroke has one edge on each side and stays smooth.
-                using (var pen = new Pen(Color.White, ring)) g.DrawEllipse(pen, x, y, d, d);
+                // No white ring. It existed to separate the disc from the artwork underneath,
+                // which stopped being a problem once the badge started overhanging the logo's
+                // square — most of its edge now meets transparency, not the icon.
             }
             return bmp;
         }
