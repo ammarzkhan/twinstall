@@ -95,6 +95,12 @@ namespace Twinstall.App
         internal static void RemoveAllRegistration(AppConfig cfg)
         {
             if (cfg != null) UnregisterProtocol(cfg.Scheme);
+
+            // A background task that outlives the app it belongs to is exactly the kind of
+            // leftover people are right to resent.
+            SetIconWatcher(false);
+            StopIconWatcher();
+
             try
             {
                 using (RegistryKey reg = Registry.CurrentUser.OpenSubKey(RegisteredAppsPath, true))
@@ -577,6 +583,110 @@ namespace Twinstall.App
             }
         }
 
+        // ----------------------------------------------------------- icon watcher --
+        private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string WatcherValue = "Twinstall Icon Watcher";
+
+        /// <summary>
+        /// Keeps the badges applied for the whole session, by starting <c>--watch 0</c> at login.
+        ///
+        /// Badging was previously a 60-second burst after launch and nothing afterwards, so the
+        /// badges vanished later in the session with no obvious cause. Two things take them off
+        /// and both happen long after that minute: switching virtual desktops makes Windows
+        /// rebuild taskbar buttons, and Electron apps set their own taskbar icon whenever an
+        /// unread count changes, overwriting ours. WM_SETICON has no "and keep it this way" —
+        /// something has to be there to put it back.
+        ///
+        /// Registered under Run rather than dropped in the Startup folder so Windows lists it in
+        /// Task Manager's Startup apps, where the user can see it and switch it off.
+        /// </summary>
+        internal static bool SetIconWatcher(bool enabled)
+        {
+            try
+            {
+                if (enabled)
+                {
+                    using (RegistryKey key = Registry.CurrentUser.CreateSubKey(RunKey))
+                        key.SetValue(WatcherValue, "\"" + AppPaths.SelfExe + "\" --watch 0");
+                    Log.Write("icon watcher will start at login");
+                }
+                else
+                {
+                    using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunKey, true))
+                        if (key?.GetValue(WatcherValue) != null)
+                            key.DeleteValue(WatcherValue, throwOnMissingValue: false);
+                    Log.Write("icon watcher removed from login");
+                }
+                return true;
+            }
+            catch (UnauthorizedAccessException ex) { Log.Write("watcher registration failed: " + ex.Message); return false; }
+            catch (System.Security.SecurityException ex) { Log.Write("watcher registration failed: " + ex.Message); return false; }
+            catch (IOException ex) { Log.Write("watcher registration failed: " + ex.Message); return false; }
+        }
+
+        /// <summary>
+        /// Stops any running watcher. Identified by its command line rather than by process
+        /// name, because the management UI and the router are the same executable — killing
+        /// every Twinstall.exe would close the window the user is standing in.
+        /// </summary>
+        internal static void StopIconWatcher()
+        {
+            int self = Environment.ProcessId;
+            foreach (Process p in Process.GetProcessesByName("Twinstall"))
+            {
+                try
+                {
+                    if (p.Id == self) continue;
+                    if (!WatcherCommandLine(p.Id)) continue;
+                    p.Kill();
+                    Log.Write("stopped the icon watcher (pid " + p.Id.ToString(CultureInfo.InvariantCulture) + ")");
+                }
+                catch (System.ComponentModel.Win32Exception) { }
+                catch (InvalidOperationException) { }
+                catch (NotSupportedException) { }
+                finally { p.Dispose(); }
+            }
+        }
+
+        private static bool WatcherCommandLine(int pid)
+        {
+            try
+            {
+                using (var searcher = new System.Management.ManagementObjectSearcher(
+                           "SELECT CommandLine FROM Win32_Process WHERE ProcessId = "
+                           + pid.ToString(CultureInfo.InvariantCulture)))
+                using (var results = searcher.Get())
+                {
+                    foreach (System.Management.ManagementObject mo in results)
+                    {
+                        string cl = mo["CommandLine"] as string;
+                        if (cl != null && cl.Contains("--watch", StringComparison.OrdinalIgnoreCase))
+                            return true;
+                    }
+                }
+            }
+            catch (System.Management.ManagementException) { }
+            catch (UnauthorizedAccessException) { }
+            return false;
+        }
+
+        /// <summary>Starts the watcher now, so badges survive without waiting for a sign-out.</summary>
+        internal static void StartIconWatcher()
+        {
+            try
+            {
+                var psi = new ProcessStartInfo(AppPaths.SelfExe)
+                {
+                    Arguments = "--watch 0",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (Process.Start(psi)) { }
+            }
+            catch (System.ComponentModel.Win32Exception ex) { Log.Write("could not start the watcher: " + ex.Message); }
+            catch (InvalidOperationException ex) { Log.Write("could not start the watcher: " + ex.Message); }
+        }
+
         // ------------------------------------------------------- add/remove programs --
         private const string UninstallKey =
             @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Twinstall";
@@ -684,6 +794,11 @@ namespace Twinstall.App
 
             if (desktopShortcuts)
                 lines.Insert(3, "Add a desktop shortcut for each account");
+
+            bool badges = false;
+            if (cfg != null) foreach (Instance i in cfg.Instances) if (i.Badge) { badges = true; break; }
+            if (badges)
+                lines.Add("Run a small background task at login that keeps the badges applied");
 
             if (!string.IsNullOrWhiteSpace(cfg?.Scheme))
                 lines.Add("Open Settings so you can choose Twinstall for " + cfg.Scheme + ":// yourself");

@@ -731,6 +731,14 @@ namespace Twinstall.App
             // So it can be removed from Settings like anything else, not only from in here.
             Registration.RegisterUninstallEntry();
 
+            // Badges do not stay applied on their own — see SetIconWatcher. Only worth running
+            // if something actually wants a badge.
+            bool wantsBadges = false;
+            foreach (Instance i in _config.Instances) if (i.Badge) { wantsBadges = true; break; }
+
+            Registration.SetIconWatcher(wantsBadges);
+            if (wantsBadges) Registration.StartIconWatcher();
+
             Log.Write("setup applied: " + _config.Instances.Count + " accounts, "
                       + icons + " icons, " + shortcuts + " shortcuts");
 

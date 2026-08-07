@@ -125,7 +125,25 @@ namespace Twinstall.App
 
         internal static int Watch(int seconds)
         {
-            Log.Write(seconds <= 0 ? "icon watcher started" : "icon refresh for " + seconds + "s");
+            // One watcher per session. Without this, every --launch and every login could add
+            // another, each re-applying the same icons a second and a half apart for ever.
+            if (seconds <= 0)
+            {
+                using (var only = new System.Threading.Mutex(true, @"Local\TwinstallIconWatcher", out bool mine))
+                {
+                    if (!mine)
+                    {
+                        Log.Write("an icon watcher is already running - not starting another");
+                        return 0;
+                    }
+
+                    Log.Write("icon watcher started");
+                    ApplyIcons(InstanceConfig.Load(AppPaths.ConfigFile), 0);
+                    return 0;
+                }
+            }
+
+            Log.Write("icon refresh for " + seconds.ToString(CultureInfo.InvariantCulture) + "s");
             ApplyIcons(InstanceConfig.Load(AppPaths.ConfigFile), seconds);
             return 0;
         }
@@ -147,11 +165,25 @@ namespace Twinstall.App
 
             var seen = new HashSet<long>();
             DateTime deadline = seconds <= 0 ? DateTime.MaxValue : DateTime.Now.AddSeconds(seconds);
-            int pause = seconds <= 0 ? 2500 : 500;
+            int pause = seconds <= 0 ? 1500 : 500;
+
+            // Which process belongs to which account changes only when an instance starts or
+            // stops, but the icon needs re-applying far more often than that. Enumerating
+            // windows is a couple of user32 calls; ProcessMap is a WMI query across every
+            // process sharing the executable's name, which is not something to run every
+            // second and a half for the life of the session.
+            IDictionary<int, string> running = null;
+            DateTime mapAge = DateTime.MinValue;
+            TimeSpan mapTtl = TimeSpan.FromSeconds(seconds <= 0 ? 6 : 2);
 
             while (DateTime.Now < deadline)
             {
-                IDictionary<int, string> running = ProcessMap.Build(cfg);
+                if (running == null || DateTime.Now - mapAge > mapTtl)
+                {
+                    running = ProcessMap.Build(cfg);
+                    mapAge = DateTime.Now;
+                }
+
                 if (running.Count > 0)
                 {
                     foreach (KeyValuePair<string, string> pair in badged)
