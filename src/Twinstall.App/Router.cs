@@ -32,6 +32,18 @@ namespace Twinstall.App
         {
             Log.Write("url: " + Log.SafeUrl(url));
 
+            // The self-test link exists only to make Windows show its handler chooser during
+            // setup. Reaching here means the user picked Twinstall and it works — say so, and
+            // do NOT forward it to the target application.
+            if (url != null && url.Contains("//" + Registration.SelfTestHost, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Write("self-test link received — Twinstall is the handler");
+                Ui.Info("That worked.\r\n\r\n"
+                      + "Twinstall is now handling these links, so a sign-in will land on the "
+                      + "account you started it from.\r\n\r\nYou can close this and Twinstall.");
+                return 0;
+            }
+
             AppConfig cfg = InstanceConfig.Load(AppPaths.ConfigFile);
 
             if (string.IsNullOrWhiteSpace(cfg.ExePath) || !File.Exists(cfg.ExePath))

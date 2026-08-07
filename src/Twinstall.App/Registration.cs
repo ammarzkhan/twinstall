@@ -131,12 +131,86 @@ namespace Twinstall.App
             return null;
         }
 
+        /// <summary>
+        /// True when Windows will actually hand this scheme to us.
+        ///
+        /// Two places have to be consulted, and the second is the one that matters. Choosing an
+        /// app in Settings does not rewrite HKCU\Software\Classes\&lt;scheme&gt; — it writes a
+        /// UserChoice pointing at a ProgId, and that takes precedence. Checking only the class
+        /// key reports "not the handler" immediately after the user has successfully set us as
+        /// the handler, which is worse than not checking at all.
+        /// </summary>
         internal static bool WeHandle(string scheme)
         {
+            if (string.IsNullOrWhiteSpace(scheme)) return false;
+
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                           @"Software\Microsoft\Windows\CurrentVersion\Explorer\UrlAssociations\"
+                           + scheme + @"\UserChoice"))
+                {
+                    string progId = key?.GetValue("ProgId") as string;
+                    if (!string.IsNullOrEmpty(progId))
+                        return string.Equals(progId, ProgIdFor(scheme), StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch (System.Security.SecurityException) { }
+            catch (UnauthorizedAccessException) { }
+            catch (IOException) { }
+
             string cmd = CurrentHandler(scheme);
             if (string.IsNullOrEmpty(cmd)) return false;
             return PathUtil.SamePath(SchemeMatcher.ExtractExecutable(cmd), AppPaths.SelfExe);
         }
+
+        /// <summary>
+        /// True when nothing at all claims the scheme. In that state, opening a link of that
+        /// scheme makes Windows show its own "How do you want to open this?" chooser — which is
+        /// a far kinder way to set the default than describing where to click in Settings.
+        /// </summary>
+        internal static bool NobodyHandles(string scheme)
+        {
+            if (string.IsNullOrWhiteSpace(scheme)) return false;
+
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
+                           @"Software\Microsoft\Windows\CurrentVersion\Explorer\UrlAssociations\"
+                           + scheme + @"\UserChoice"))
+                {
+                    if (!string.IsNullOrEmpty(key?.GetValue("ProgId") as string)) return false;
+                }
+            }
+            catch (System.Security.SecurityException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+            catch (IOException) { return false; }
+
+            return string.IsNullOrEmpty(CurrentHandler(scheme));
+        }
+
+        /// <summary>
+        /// Opens a link of the app's own scheme purely so Windows shows its chooser. The URL is
+        /// recognised by <see cref="Router"/> and never reaches the target application.
+        /// </summary>
+        internal static bool TriggerChooser(string scheme)
+        {
+            if (string.IsNullOrWhiteSpace(scheme)) return false;
+            try
+            {
+                using (Process.Start(new ProcessStartInfo(scheme + "://" + SelfTestHost) { UseShellExecute = true })) { }
+                Log.Write("opened " + scheme + ":// to bring up the handler chooser");
+                return true;
+            }
+            catch (System.ComponentModel.Win32Exception ex) { Log.Write("chooser failed: " + ex.Message); return false; }
+            catch (InvalidOperationException ex) { Log.Write("chooser failed: " + ex.Message); return false; }
+        }
+
+        /// <summary>
+        /// The host used by the self-test link. Distinctive enough that no real callback will
+        /// collide with it, so the router can recognise it and stop rather than forward.
+        /// </summary>
+        internal const string SelfTestHost = "twinstall-selftest";
 
         internal static void OpenDefaultAppsSettings()
         {

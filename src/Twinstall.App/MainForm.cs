@@ -52,7 +52,21 @@ namespace Twinstall.App
             Icon = Branding.AppIcon();
             BuildChrome();
             Load += (s, e) => { LoadPresets(); Show(_previewStep ?? Step.ChooseApp); };
+
+            // Choosing the handler happens in Settings, i.e. outside this window. Re-check on
+            // the way back so the last screen answers "did that work?" without being asked —
+            // and only rebuild when the answer actually changed, so it doesn't flicker.
+            Activated += (s, e) =>
+            {
+                if (_step != Step.Done) return;
+                bool now = Registration.WeHandle(_config.Scheme);
+                if (now == _handlerWasSet) return;
+                _handlerWasSet = now;
+                ShowLater(Step.Done);
+            };
         }
+
+        private bool _handlerWasSet;
 
         private Step? _previewStep;
 
@@ -66,10 +80,14 @@ namespace Twinstall.App
             _previewStep = step;
             Load += (s, e) =>
             {
-                if (_chosenExe == null && _installed.Count > 0)
-                    _chosenExe = Presets.FindInstalled(_installed[0]);
+                // A real saved setup wins: previewing should show this machine's actual state
+                // where there is one, and only invent data when there is nothing to show.
+                bool haveReal = !string.IsNullOrWhiteSpace(_config.ExePath);
+                if (_chosenExe == null)
+                    _chosenExe = haveReal ? _config.ExePath
+                               : (_installed.Count > 0 ? Presets.FindInstalled(_installed[0]) : null);
 
-                if (step >= Step.Result && _chosenExe != null)
+                if (step >= Step.Result && _chosenExe != null && !haveReal)
                 {
                     // Real detection minus the launch test: genuine data, nothing started.
                     _detection = Detector.Run(_chosenExe, runProbe: false);
@@ -651,53 +669,114 @@ namespace Twinstall.App
         // ------------------------------------------------------- step 5: done --
         private void BuildDone()
         {
-            Head("You're set up", "All done");
+            bool handled = Registration.WeHandle(_config.Scheme);
+            bool unclaimed = Registration.NobodyHandles(_config.Scheme);
+            bool needsHandler = _lastRegistered && !handled;
+
+            Head(handled ? "You're set up" : "One step left",
+                 handled ? "All done" : "Twinstall is not handling links yet");
+
             _back.Visible = false;
             _next.Visible = true;
-            _next.Text = "Finish";
+            _next.Text = needsHandler ? "Finish anyway" : "Finish";
+            _next.Kind = needsHandler ? ButtonKind.Secondary : ButtonKind.Primary;
             _next.Enabled = true;
 
-            int y = AddNote(0, _lastShortcuts + " shortcut(s) added to your Start menu — one per account. "
-                             + "Open the second one and sign in as usual.");
+            int y = AddFact(0, true, _lastShortcuts.ToString(CultureInfo.InvariantCulture)
+                                     + " Start-menu shortcut(s) added, one per account");
+            if (_taskbarOptIn)
+                y = AddFact(y, true, "Taskbar setting applies after you sign out and back in");
 
-            if (_lastRegistered)
+            if (!needsHandler)
             {
-                y = AddFact(y, true, "Twinstall is registered as a handler for " + _config.Scheme + "://");
-                var note = new Label
-                {
-                    Text = "One last step, and it has to be you: Windows only lets you choose a default "
-                         + "handler yourself. Open Settings, find " + _config.Scheme + ":// and pick Twinstall.",
-                    Font = Theme.Body,
-                    ForeColor = Theme.Text,
-                    AutoSize = false,
-                    Location = new Point(2, y + 8),
-                    Size = new Size(_content.Width - 30, 48)
-                };
-                _content.Controls.Add(note);
-                y += 62;
-
-                var open = new FlatButton("Open Default apps settings", ButtonKind.Secondary)
-                {
-                    Location = new Point(0, y),
-                    Size = new Size(230, 40)
-                };
-                open.Click += (s, e) => Registration.OpenDefaultAppsSettings();
-                _content.Controls.Add(open);
-                y += 52;
+                if (handled) y = AddFact(y, true, "Twinstall is handling " + _config.Scheme + ":// links");
+                y = AddNote(y + 6, "Open your second account from the Start menu and sign in as usual.");
+                AddLogButton(y);
+                Say("Everything Twinstall changed can be undone from the first screen.");
+                return;
             }
 
-            if (_taskbarOptIn)
-                y = AddFact(y, true, "The taskbar setting applies after you sign out and back in");
+            // --- the handler is still not set, and without it none of this works ------
+            y = AddFact(y, false, "Nothing is handling " + _config.Scheme
+                                  + ":// yet — sign-ins will still go to the wrong account");
 
+            y = AddNote(y + 4, "Windows only lets you choose this yourself; no app can set it for you. "
+                             + (unclaimed
+                                ? "Because nothing currently claims these links, the quickest way is to open one."
+                                : "Use Settings to point them at Twinstall."));
+
+            if (unclaimed)
+            {
+                var choose = new FlatButton("Choose Twinstall now", ButtonKind.Primary)
+                {
+                    Location = new Point(0, y),
+                    Size = new Size(210, 42)
+                };
+                choose.Click += (s, e) =>
+                {
+                    Registration.TriggerChooser(_config.Scheme);
+                    Say("Windows should be asking how to open the link — pick Twinstall, "
+                      + "and tick “Always use this app”.");
+                };
+                _content.Controls.Add(choose);
+
+                var explain = new Label
+                {
+                    Text = "Windows will ask how to open the link. Pick Twinstall and tick\r\n"
+                         + "“Always use this app”. Nothing is sent anywhere — the link is a test.",
+                    Font = Theme.Small,
+                    ForeColor = Theme.TextMuted,
+                    AutoSize = false,
+                    Location = new Point(220, y + 2),
+                    Size = new Size(Math.Max(60, _content.Width - 250), 40)
+                };
+                _content.Controls.Add(explain);
+                y += 54;
+            }
+
+            var viaSettings = new FlatButton(unclaimed ? "Or use Settings" : "Open Settings",
+                                             unclaimed ? ButtonKind.Secondary : ButtonKind.Primary)
+            {
+                Location = new Point(0, y),
+                Size = new Size(190, 40)
+            };
+            viaSettings.Click += (s, e) =>
+            {
+                Registration.OpenDefaultAppsSettings();
+                Say("Settings is open — follow the three steps below, then come back here.");
+            };
+            _content.Controls.Add(viaSettings);
+
+            var recheck = new FlatButton("Check again", ButtonKind.Secondary)
+            {
+                Location = new Point(200, y),
+                Size = new Size(150, 40)
+            };
+            recheck.Click += (s, e) => ShowLater(Step.Done);
+            _content.Controls.Add(recheck);
+            y += 52;
+
+            var hint = new SettingsHint
+            {
+                Scheme = _config.Scheme ?? "claude",
+                Location = new Point(0, y),
+                Width = Math.Max(200, _content.Width - 26)
+            };
+            _content.Controls.Add(hint);
+
+            AddLogButton(y + hint.Height + 4);
+            Say("This window re-checks by itself whenever you come back to it.");
+        }
+
+        private void AddLogButton(int y)
+        {
             var log = new FlatButton("Open log", ButtonKind.Subtle)
             {
-                Location = new Point(-6, y + 8),
+                Location = new Point(-6, y),
                 Size = new Size(110, 34)
             };
             log.Click += (s, e) => OpenLog();
             _content.Controls.Add(log);
-
-            Say("Everything Twinstall changed can be undone from the first screen.");
         }
 
         // ---------------------------------------------------------- navigation --
@@ -725,7 +804,22 @@ namespace Twinstall.App
                     Show(Step.Review);
                     break;
                 case Step.Review:   Apply(); break;
-                default:            Close(); break;
+
+                default:
+                    // Finishing without the handler set leaves the user believing it works when
+                    // it does not — sign-ins will keep landing on the wrong account, which is
+                    // the exact problem they installed this to fix. Allowed, but never silent.
+                    if (_lastRegistered && !Registration.WeHandle(_config.Scheme)
+                        && !Ui.Confirm("Twinstall is not handling " + _config.Scheme + ":// links yet.\r\n\r\n"
+                                     + "Your two accounts and their shortcuts will work, but a sign-in "
+                                     + "started in one of them will still open the other — the thing "
+                                     + "Twinstall is meant to fix.\r\n\r\n"
+                                     + "Close anyway?"))
+                    {
+                        return;
+                    }
+                    Close();
+                    break;
             }
         }
 

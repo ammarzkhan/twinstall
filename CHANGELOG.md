@@ -23,7 +23,35 @@ saw was four things they could not do yet.
 - Headings use the app's real name. `Path.GetFileNameWithoutExtension` produced "slack can do
   this"; it now prefers the preset's display name, then the binary's `ProductName`.
 
+### Fixed — the last step could be skipped without noticing
+
+The final screen said "You're set up" and offered **Finish** whether or not the scheme handler
+had actually been chosen. Everything else can succeed — profiles, shortcuts, badged icons — and
+the product still not do its job, because a sign-in will keep landing on the wrong account. The
+one step that matters was the one the app was quietest about.
+
+- The screen now checks whether Windows is really handing us the scheme, and says **"One step
+  left"** with a red mark when it is not.
+- It re-checks by itself whenever the window is activated, so coming back from Settings answers
+  "did that work?" without being asked.
+- **Finish** becomes **Finish anyway** and explains what will still be broken before closing.
+- The check reads the **UserChoice** key, not just `HKCU\Software\Classes\<scheme>`. Choosing an
+  app in Settings writes the former and leaves the latter alone, so the obvious check reports
+  failure at the exact moment the user has just succeeded.
+
 ### Added
+
+- **A one-click way to set the handler.** When nothing yet claims the scheme, Twinstall opens a
+  harmless self-test link of its own, which makes *Windows* show its "How do you want to open
+  this?" chooser with Twinstall in the list. That is far kinder than describing where to click.
+  The link is recognised by the router, confirms success, and is never forwarded to the target
+  application.
+- **A drawn walkthrough for the Settings route**, because "open Settings and pick Twinstall" is
+  not followable by a newcomer: that page has two search boxes, and typing the scheme into the
+  wrong one silently finds nothing. The three steps now name which box, what to type, and what
+  to click. Drawn as a schematic rather than screenshotted — a picture of the Settings app would
+  be Microsoft's artwork inside our binary, which is the same thing we avoid for every other
+  vendor.
 
 - **A logo, and a colour of its own.** The mark is the same rounded tile twice, told apart by
   colour — which is the product in one shape. `assets/logo.svg` is the source;

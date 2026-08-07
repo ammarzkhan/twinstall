@@ -176,6 +176,119 @@ namespace Twinstall.App
         }
     }
 
+    /// <summary>
+    /// A drawn walkthrough of the three clicks needed in Windows Settings.
+    ///
+    /// Drawn rather than screenshotted on purpose: a picture of the Settings app would be
+    /// Microsoft's artwork sitting inside our binary, which the project avoids for exactly the
+    /// same reason it never ships Slack's or Claude's logo. A schematic carries the same
+    /// information and is ours.
+    ///
+    /// It exists because "open Settings and pick Twinstall" is not an instruction a newcomer
+    /// can follow — that page has two search boxes and the wrong one silently finds nothing.
+    /// </summary>
+    internal sealed class SettingsHint : Control
+    {
+        internal string Scheme { get; set; } = "claude";
+
+        internal SettingsHint()
+        {
+            Height = 168;
+            Font = Theme.Body;
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
+                   | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw
+                   | ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+
+            int y = 0;
+            y = Row(g, y, "1", "Type  " + Scheme + "  into the FIRST search box,",
+                    "the one under “Set a default for a file type or link type”.", DrawSearchBox);
+            y = Row(g, y, "2", "A row appears saying “Choose a default”.", "Click it.", DrawChooseRow);
+            Row(g, y, "3", "Pick Twinstall from the list, then choose Set default.", null, DrawPickRow);
+        }
+
+        private int Row(Graphics g, int y, string number, string line1, string line2,
+                        Action<Graphics, Rectangle> glyph)
+        {
+            // numbered disc
+            using (var b = new SolidBrush(Theme.Accent))
+                g.FillEllipse(b, 0, y + 8, 22, 22);
+            TextRenderer.DrawText(g, number, Theme.Small, new Rectangle(0, y + 8, 22, 22), Theme.AccentText,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+
+            var box = new Rectangle(34, y + 4, 190, 30);
+            glyph(g, box);
+
+            var textRect = new Rectangle(238, y + (line2 == null ? 12 : 3), Math.Max(40, Width - 244), 20);
+            TextRenderer.DrawText(g, line1, Theme.Body, textRect, Theme.Text,
+                TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+
+            if (line2 != null)
+            {
+                var r2 = new Rectangle(238, y + 22, Math.Max(40, Width - 244), 20);
+                TextRenderer.DrawText(g, line2, Theme.Small, r2, Theme.TextMuted,
+                    TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
+            }
+            return y + 54;
+        }
+
+        private void DrawSearchBox(Graphics g, Rectangle r)
+        {
+            using (GraphicsPath p = Theme.RoundedRect(r, 5))
+            using (var b = new SolidBrush(Theme.Surface))
+            using (var pen = new Pen(Theme.Accent, 1.6f))
+            {
+                g.FillPath(b, p);
+                g.DrawPath(pen, p);
+            }
+            // magnifier
+            using (var pen = new Pen(Theme.TextMuted, 1.5f))
+            {
+                g.DrawEllipse(pen, r.X + 9, r.Y + 9, 9, 9);
+                g.DrawLine(pen, r.X + 17, r.Y + 17, r.X + 21, r.Y + 21);
+            }
+            TextRenderer.DrawText(g, Scheme, Theme.Body, new Rectangle(r.X + 28, r.Y, r.Width - 34, r.Height),
+                Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+
+        private void DrawChooseRow(Graphics g, Rectangle r)
+        {
+            using (GraphicsPath p = Theme.RoundedRect(r, 5))
+            using (var b = new SolidBrush(Theme.Surface))
+            using (var pen = new Pen(Theme.Accent, 1.6f))
+            {
+                g.FillPath(b, p);
+                g.DrawPath(pen, p);
+            }
+            using (var pen = new Pen(Theme.TextMuted, 1.6f))
+            {
+                g.DrawLine(pen, r.X + 10, r.Y + 15, r.X + 20, r.Y + 15);
+                g.DrawLine(pen, r.X + 15, r.Y + 10, r.X + 15, r.Y + 20);
+            }
+            TextRenderer.DrawText(g, "Choose a default", Theme.Small,
+                new Rectangle(r.X + 28, r.Y, r.Width - 34, r.Height), Theme.TextMuted,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+
+        private void DrawPickRow(Graphics g, Rectangle r)
+        {
+            using (GraphicsPath p = Theme.RoundedRect(r, 5))
+            using (var b = new SolidBrush(Theme.Accent))
+                g.FillPath(b, p);
+
+            TextRenderer.DrawText(g, "Twinstall", Theme.BodyStrong,
+                new Rectangle(r.X + 12, r.Y, r.Width - 18, r.Height), Theme.AccentText,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        }
+    }
+
     /// <summary>One line of the detection result: a tick or cross, and plain language.</summary>
     internal sealed class FactRow : Control
     {
