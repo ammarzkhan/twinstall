@@ -337,6 +337,15 @@ static class Tests
         Eq(LaunchProbe.Evaluate(dir, fs(populated), 30, 30), ProbeVerdict.Honoured,
            "creation is checked before the clock");
 
+        // "Windows would not start it" is not the same answer as "the app ignored the flag".
+        // OpenAI Codex denies CreateProcess from every route while Claude, in the same folder
+        // with identical ACLs, starts fine — so the two outcomes must stay distinct.
+        Check(LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, "x.exe")
+                != LaunchProbe.Explain(ProbeVerdict.NotHonoured, "x.exe"),
+              "a blocked launch reads differently from an ignored flag");
+        Check(LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, "x.exe").Contains("Nothing was changed"),
+              "a blocked launch still promises nothing was changed");
+
         Eq(LaunchProbe.Evaluate(dir, null, 1, 30), ProbeVerdict.Invalid, "no file probe is invalid");
         Eq(LaunchProbe.Evaluate(dir, fs(empty), 1, 0), ProbeVerdict.Invalid, "zero timeout is invalid");
         Eq(LaunchProbe.Evaluate("", fs(empty), 1, 30), ProbeVerdict.Invalid, "no directory is invalid");

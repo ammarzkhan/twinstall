@@ -16,7 +16,17 @@ namespace Twinstall.Core
         Honoured = 2,
 
         /// <summary>The wait elapsed with nothing created. Report it; change nothing.</summary>
-        NotHonoured = 3
+        NotHonoured = 3,
+
+        /// <summary>
+        /// Windows refused to start the executable at all, so the flag was never tested.
+        ///
+        /// Distinct from <see cref="NotHonoured"/> on purpose: we did not learn that the app
+        /// ignores --user-data-dir, we learned we cannot ask. Measured on OpenAI Codex, a
+        /// Store app whose executable returns "Access is denied" to CreateProcess by every
+        /// method, while Claude's — same folder, byte-identical ACLs — starts fine.
+        /// </summary>
+        LaunchBlocked = 4
     }
 
     /// <summary>
@@ -153,6 +163,10 @@ namespace Twinstall.Core
                     return name + " created a profile where it was told to, so separate instances will work.";
                 case ProbeVerdict.NotHonoured:
                     return name + " ignored --user-data-dir, so it cannot run separate instances. Nothing was changed.";
+                case ProbeVerdict.LaunchBlocked:
+                    return "Windows would not let Twinstall start " + name + ", so it could not be tested. "
+                         + "Some Store apps can only be opened through their own tile or shortcut, and those "
+                         + "cannot be given a separate profile. Nothing was changed.";
                 case ProbeVerdict.Pending:
                     return "Still waiting for " + name + " to create a profile.";
                 default:

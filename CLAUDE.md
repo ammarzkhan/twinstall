@@ -35,12 +35,12 @@ coloured badges on the taskbar icons.
 configures itself, and every adapter has now been executed against real applications. What
 remains unbuilt is packaging, not function.
 
-11 files of pure decision logic with 148 passing tests, 8 Win32 adapters, and one WinForms app.
+11 files of pure decision logic with 150 passing tests, 8 Win32 adapters, and one WinForms app.
 
 | | State |
 |---|---|
-| `src/Twinstall.Core` | ✅ analysed clean, **148/148 tests passing** |
-| `src/Twinstall.Tests` | ✅ 148 assertions, console runner, exit code is the result |
+| `src/Twinstall.Core` | ✅ analysed clean, **150/150 tests passing** |
+| `src/Twinstall.Tests` | ✅ 150 assertions, console runner, exit code is the result |
 | `src/Twinstall.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
 | `src/Twinstall.App` | ✅ `Twinstall.exe` — router, launcher, icon watcher, management UI |
 | **Detection, all steps** | ✅ verified against Claude, Slack and VS Code |
@@ -101,7 +101,7 @@ dotnet build Twinstall.sln -c Release
 dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
-Expect `passed: 148   failed: 0`. There is no test framework — the runner is a console app, so it
+Expect `passed: 150   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
 `Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
@@ -144,9 +144,22 @@ from the full name by taking the **first and last** underscore-delimited segment
 `Claude_1.24012.11.0_x64__pzs8sxrjxfjjc` → `Claude_pzs8sxrjxfjjc`. Implemented in
 `PackagePaths.FamilyFromFullName`, with a test.
 
-**Store-installed exes CAN be launched with arguments.** An early theory said `WindowsApps` ACLs
-prevented passing `--user-data-dir` to a Store build. That is **wrong** — a plain `.cmd` doing
-exactly that works. Don't build a portable-copy workaround for a problem that doesn't exist.
+**Store-installed exes can *usually* be launched with arguments — but not always.** An early
+theory said `WindowsApps` ACLs prevented passing `--user-data-dir` to a Store build. That was
+wrong: Claude's Store executable starts fine with arguments, so don't build a portable-copy
+workaround for a problem that doesn't exist.
+
+**It is not universal, though.** Measured 7 Aug 2026: **OpenAI Codex**, also a Store app, refuses
+`CreateProcess` with *Access is denied* by every route tried — `Start-Process`, `Process.Start`
+with and without a working directory, from an ordinary shell and from the app alike. Its
+executable's ACL is **byte-identical to Claude's** (`BUILTIN\Users: ReadAndExecute`), and the
+file opens for reading, so the ACL is not the discriminator and neither is the working directory.
+Both theories were checked and both were wrong; the mechanism is still unidentified.
+
+What matters is that the product handles it: `ProbeVerdict.LaunchBlocked` is a **distinct
+outcome** from `NotHonoured`. We did not learn that the app ignores the flag — we learned we
+cannot ask. Never collapse the two; "this app doesn't support profiles" is a different and
+unearned claim.
 
 **But a normal app CANNOT list `C:\Program Files\WindowsApps`.** Traverse is granted, read is
 not. So:

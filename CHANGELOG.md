@@ -35,6 +35,12 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
   between "we ran the probe against this" and "this follows a usual installer convention" is
   visible rather than implied.
 
+- New `ProbeVerdict.LaunchBlocked`, for when Windows refuses to start the target at all. That
+  is a different answer from `NotHonoured` — we did not learn that the app ignores
+  `--user-data-dir`, we learned we could not ask — and collapsing the two would claim something
+  unearned. Found on OpenAI Codex, a Store app whose executable denies `CreateProcess` by every
+  route while Claude's, in the same folder with byte-identical ACLs, starts normally.
+
 ### Changed
 
 - `apps.json` states explicitly that it is **not** a compatibility matrix. Presence does not mean

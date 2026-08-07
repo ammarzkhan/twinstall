@@ -111,8 +111,12 @@ namespace Twinstall.Platform
             }
             catch (Win32Exception ex)
             {
-                detail = "could not start the executable: " + ex.Message;
-                verdict = ProbeVerdict.Invalid;
+                // Windows refused to start it. That is a different answer from "the app
+                // ignored the flag" — we never got to ask. Measured on OpenAI Codex, whose
+                // Store executable denies CreateProcess by every route while Claude's, in the
+                // same folder with identical ACLs, starts normally.
+                detail = LaunchProbe.Explain(ProbeVerdict.LaunchBlocked, exePath) + "  (" + ex.Message + ")";
+                verdict = ProbeVerdict.LaunchBlocked;
             }
             catch (InvalidOperationException ex)
             {

@@ -88,8 +88,8 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **148 assertions, all passing** | **yes — suite executed** |
-| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 148  failed: 0`** |
+| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **150 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 150  failed: 0`** |
 | `Twinstall.Platform` (8 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **yes — every adapter has run** |
 | `Twinstall.App` (10 files) | real Windows | **yes, clean** | driven through Core | **yes — routes, launches, badges, UI opens** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
