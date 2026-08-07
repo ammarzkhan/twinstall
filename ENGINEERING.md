@@ -142,6 +142,27 @@ will not be flagged there.** Dispose those yourself.
 
 ## Facts that cost real time to establish
 
+**`global.json` is not optional, and its absence fails only in CI.** Without one, `dotnet`
+selects the **highest SDK installed on the machine**, not the one `setup-dotnet` just put
+there — and GitHub's Windows image ships newer SDKs alongside it. The first CI run therefore
+compiled with a different Roslyn, and a different analyser set, while faithfully logging that
+it had installed 8.0.423.
+
+The symptom is the worst kind of red: `CA1859` failed CI on a rule that does not fire locally,
+on a clean build, on the same reported SDK version. Two theories were checked and discarded
+first — SDK patch drift (both said 8.0.423) and incremental builds masking it locally
+(`dotnet clean` still passed). `global.json` pins to .NET 8 with `rollForward: latestFeature`:
+strict enough to keep the analyser set predictable, loose enough to accept any 8.0.x.
+
+**MSBuild reports each warning once per referencing project.** A Core warning is printed again
+while building Platform, Tests and App. So counting `': warning '` across a build log counts
+*occurrences*, not warnings — it read **18** for a real **9**, and failed a gate written for
+the deduplicated figure the summary line reports. The CI sweep deduplicates by message and
+prints what it counted, so a future failure names the new warning instead of only moving a
+number.
+
+
+
 **MSIX profile virtualisation.** For Store-installed apps, `%APPDATA%` becomes
 `%LOCALAPPDATA%\Packages\<PackageFamilyName>\LocalCache\Roaming`. The family name is derived
 from the full name by taking the **first and last** underscore-delimited segments:
