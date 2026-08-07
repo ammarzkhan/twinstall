@@ -141,19 +141,26 @@ namespace Twinstall.App
         /// key reports "not the handler" immediately after the user has successfully set us as
         /// the handler, which is worse than not checking at all.
         /// </summary>
+        private const string UrlAssociations = @"Software\Microsoft\Windows\Shell\Associations\UrlAssociations";
+
+        private static RegistryKey SafeOpen(RegistryKey parent, string name)
+        {
+            try { return parent.OpenSubKey(name); }
+            catch (System.Security.SecurityException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
+            catch (IOException) { return null; }
+        }
+
         internal static bool WeHandle(string scheme)
         {
             if (string.IsNullOrWhiteSpace(scheme)) return false;
+            string wanted = ProgIdFor(scheme);
 
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
-                           @"Software\Microsoft\Windows\CurrentVersion\Explorer\UrlAssociations\"
-                           + scheme + @"\UserChoice"))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(UrlAssociations + "\\" + scheme))
                 {
-                    string progId = key?.GetValue("ProgId") as string;
-                    if (!string.IsNullOrEmpty(progId))
-                        return string.Equals(progId, ProgIdFor(scheme), StringComparison.OrdinalIgnoreCase);
+                    if (key != null && HasProgId(key, wanted, 0)) return true;
                 }
             }
             catch (System.Security.SecurityException) { }
@@ -163,6 +170,39 @@ namespace Twinstall.App
             string cmd = CurrentHandler(scheme);
             if (string.IsNullOrEmpty(cmd)) return false;
             return PathUtil.SamePath(SchemeMatcher.ExtractExecutable(cmd), AppPaths.SelfExe);
+        }
+
+        /// <summary>
+        /// Looks for our ProgId anywhere under the scheme's association key, rather than at one
+        /// exact path — because Microsoft keeps moving it.
+        ///
+        /// Measured on Windows 11, 7 Aug 2026, after choosing Twinstall in Settings:
+        ///
+        ///   ...\Shell\Associations\UrlAssociations\claude\UserChoiceLatest\ProgId  ProgId = Twinstall.Url.claude
+        ///
+        /// Note all three surprises. It is <b>UserChoiceLatest</b>, not UserChoice, which held
+        /// only a Hash. The ProgId is a level deeper still, in a subkey of the same name. And
+        /// existing associations on the same machine use the old shape — https had both, with
+        /// the ProgId under UserChoice — so a check written against either layout alone is
+        /// right for some schemes and wrong for others.
+        ///
+        /// The cost of getting this wrong is not cosmetic: the final screen told a user their
+        /// setup had failed at the exact moment it had succeeded, while a claude:// link was
+        /// already routing correctly.
+        /// </summary>
+        private static bool HasProgId(RegistryKey key, string wanted, int depth)
+        {
+            if (depth > 3) return false;   // the nesting is shallow; this only stops runaway
+
+            if (string.Equals(key.GetValue("ProgId") as string, wanted, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            foreach (string name in key.GetSubKeyNames())
+            {
+                using (RegistryKey child = SafeOpen(key, name))
+                    if (child != null && HasProgId(child, wanted, depth + 1)) return true;
+            }
+            return false;
         }
 
         /// <summary>
@@ -176,11 +216,9 @@ namespace Twinstall.App
 
             try
             {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(
-                           @"Software\Microsoft\Windows\CurrentVersion\Explorer\UrlAssociations\"
-                           + scheme + @"\UserChoice"))
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(UrlAssociations + "\\" + scheme))
                 {
-                    if (!string.IsNullOrEmpty(key?.GetValue("ProgId") as string)) return false;
+                    if (key != null && HasAnyProgId(key, 0)) return false;
                 }
             }
             catch (System.Security.SecurityException) { return false; }
@@ -188,6 +226,19 @@ namespace Twinstall.App
             catch (IOException) { return false; }
 
             return string.IsNullOrEmpty(CurrentHandler(scheme));
+        }
+
+        private static bool HasAnyProgId(RegistryKey key, int depth)
+        {
+            if (depth > 3) return false;
+            if (!string.IsNullOrEmpty(key.GetValue("ProgId") as string)) return true;
+
+            foreach (string name in key.GetSubKeyNames())
+            {
+                using (RegistryKey child = SafeOpen(key, name))
+                    if (child != null && HasAnyProgId(child, depth + 1)) return true;
+            }
+            return false;
         }
 
         /// <summary>

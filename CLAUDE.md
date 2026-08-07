@@ -197,6 +197,48 @@ status label at the bottom of the window, so pressing "Check this app" and "Add"
 nothing happening at all. Anything the user must act on gets a dialog; the status bar is for
 progress, not for refusals.
 
+**Reading back "am I the handler?" is where this goes wrong.** Choosing an app in Settings does
+**not** write `HKCU\Software\Classes\<scheme>`. Measured on Windows 11, 7 Aug 2026, immediately
+after picking Twinstall for `claude://`:
+
+```
+HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\claude\UserChoiceLatest\ProgId
+    ProgId = Twinstall.Url.claude
+```
+
+Three separate surprises in one path, and each was checked because the previous guess was wrong:
+
+- It is under **`Shell\Associations\UrlAssociations`**. `CurrentVersion\Explorer\UrlAssociations`
+  — the obvious sibling of the `FileExts` layout — **does not exist at all** on this machine.
+- It is **`UserChoiceLatest`**, not `UserChoice`. The latter was absent; the former held only a
+  `Hash`.
+- The `ProgId` is **one level deeper still**, in a subkey of that name.
+
+And older associations on the same machine use the *old* shape: `https` has both keys, with the
+ProgId under `UserChoice`. So a check written against either layout alone is right for some
+schemes and wrong for others. `Registration.HasProgId` therefore searches recursively for a
+`ProgId` value anywhere under the scheme's key rather than trusting one path.
+
+**The cost of getting this wrong was a screen that told the user setup had failed at the exact
+moment it had succeeded** — a `claude://` link was already routing correctly while the UI showed
+a red cross. When a check disagrees with observed behaviour, fire a real link and believe that.
+
+**Setting the handler: only three routes exist, and two of them do nothing.**
+
+| Attempt | Result |
+|---|---|
+| Open a link of the scheme | **Nothing.** `ShellExecute` returns without starting anything and without an error. Windows has a "how do you want to open this?" chooser for unknown *file types*, not for URL protocols |
+| `IApplicationAssociationRegistrationUI::LaunchAdvancedAssociationUI` | **A message box** reading "To change your default apps, go to Settings > Apps > Default apps". Deprecated in all but name |
+| `ms-settings:defaultapps?registeredAppUser=<AppName>` | ✅ opens *Apps → Default apps → &lt;AppName&gt;* with the scheme as the only entry |
+
+`<AppName>` is the value name under `RegisteredApplications`, so it must stay in step with
+`RegisterProtocol`. **Windows blocks setting this programmatically on purpose** — it is how
+browsers used to hijack each other — so one click away from the right page is the ceiling.
+
+When testing whether a Settings deep link worked, note that the window belongs to
+**`ApplicationFrameHost`**, not `SystemSettings`. Looking for the wrong process is how a working
+approach got discarded here and a broken one adopted in its place.
+
 **Protocol registration: use `RegisteredApplications`, not `HKCU\Software\Classes`.** Writing the
 scheme key directly does not win against an MSIX app's declared protocol, and it's the part of
 Store policy 10.2.8 you'd fail. Registering a ProgId plus a `UrlAssociations` capability under
