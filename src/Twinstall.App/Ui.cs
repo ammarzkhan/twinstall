@@ -31,6 +31,13 @@ namespace Twinstall.App
                 MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes;
         }
 
+        /// <summary>Yes / No / Cancel, for "undo it, keep it, or go back".</summary>
+        internal static DialogResult Choose(string message)
+        {
+            return MessageBox.Show(message, AppPaths.ProductName,
+                MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
+        }
+
         /// <summary>
         /// Asks which instance an incoming link belongs to. Reached only when nothing is
         /// running, so Z-order has nothing to say — the honest move there is to ask rather

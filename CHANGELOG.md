@@ -41,17 +41,29 @@ one step that matters was the one the app was quietest about.
 
 ### Added
 
-- **A one-click way to set the handler.** When nothing yet claims the scheme, Twinstall opens a
-  harmless self-test link of its own, which makes *Windows* show its "How do you want to open
-  this?" chooser with Twinstall in the list. That is far kinder than describing where to click.
-  The link is recognised by the router, confirms success, and is never forwarded to the target
-  application.
-- **A drawn walkthrough for the Settings route**, because "open Settings and pick Twinstall" is
-  not followable by a newcomer: that page has two search boxes, and typing the scheme into the
-  wrong one silently finds nothing. The three steps now name which box, what to type, and what
-  to click. Drawn as a schematic rather than screenshotted — a picture of the Settings app would
-  be Microsoft's artwork inside our binary, which is the same thing we avoid for every other
-  vendor.
+- **One button that lands on the right page.** `IApplicationAssociationRegistrationUI::`
+  `LaunchAdvancedAssociationUI` opens Settings at *Apps → Default apps → Twinstall*, where the
+  scheme is the only thing listed and "Choose a default" is one click away. No searching.
+
+  Two earlier attempts did not work and are recorded so they are not retried. Opening a link of
+  the scheme does **nothing at all** when nothing is registered for it — `ShellExecute` returns
+  without starting anything and without raising an error, because Windows has no "how do you
+  want to open this?" chooser for URL protocols the way it does for unknown file types. And the
+  plain `ms-settings:defaultapps` page drops the user in front of two search boxes, where typing
+  the scheme into the wrong one reports "We couldn't find anything to show here".
+
+  The call blocks until Settings closes, so it runs off the UI thread — and returning from it is
+  a good moment to re-check.
+
+- **A drawn walkthrough of the two remaining clicks**, as a schematic rather than a screenshot:
+  a picture of the Settings app would be Microsoft's artwork inside our binary, which is the
+  same thing we avoid for every other vendor.
+
+- **A rollback offer when setup is abandoned.** Closing the window with the handler unset means
+  leaving a machine that has been changed but does not work. It now offers to undo the
+  shortcuts, icons, registry entries and — only if this run enabled it — the taskbar setting.
+  Profile folders are never touched: they hold live sessions, and deleting an account someone
+  has signed into because they closed a window would be indefensible.
 
 - **A logo, and a colour of its own.** The mark is the same rounded tile twice, told apart by
   colour — which is the product in one shape. `assets/logo.svg` is the source;

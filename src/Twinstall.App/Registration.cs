@@ -4,11 +4,24 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Twinstall.Core;
 
 namespace Twinstall.App
 {
+    /// <summary>
+    /// Shell API for "let the user pick defaults for this registered application". Declared
+    /// here rather than in Twinstall.Platform because it drives UI, and Platform observes.
+    /// </summary>
+    [ComImport]
+    [Guid("1f76a169-f994-40ac-8fc8-0959e8874710")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IApplicationAssociationRegistrationUI
+    {
+        void LaunchAdvancedAssociationUI([MarshalAs(UnmanagedType.LPWStr)] string appRegistryName);
+    }
+
     /// <summary>
     /// Everything Twinstall changes outside its own folder, in one place, so it can all be
     /// undone in one place.
@@ -190,20 +203,65 @@ namespace Twinstall.App
         }
 
         /// <summary>
-        /// Opens a link of the app's own scheme purely so Windows shows its chooser. The URL is
-        /// recognised by <see cref="Router"/> and never reaches the target application.
+        /// Opens Settings **on Twinstall's own Default-apps page**, where the scheme is listed
+        /// with a single "Choose a default" row.
+        ///
+        /// This replaces two approaches that did not work. Opening a link of the scheme does
+        /// nothing at all when nothing is registered for it — ShellExecute returns without
+        /// starting anything and without an error, because Windows has no "how do you want to
+        /// open this?" chooser for URL protocols the way it does for unknown file types. And
+        /// the plain ms-settings:defaultapps page drops the user in front of two search boxes,
+        /// where typing the scheme into the wrong one silently reports finding nothing.
+        ///
+        /// This is the documented API for the job, and it lands exactly where it should.
+        ///
+        /// It blocks until the user closes Settings, so callers must not run it on the UI
+        /// thread.
         /// </summary>
-        internal static bool TriggerChooser(string scheme)
+        internal static bool OpenOurDefaultsPage()
+        {
+            try
+            {
+                Type t = Type.GetTypeFromCLSID(AssociationUiClsid);
+                if (t == null) return false;
+
+                object o = Activator.CreateInstance(t);
+                var ui = o as IApplicationAssociationRegistrationUI;
+                if (ui == null) return false;
+
+                try
+                {
+                    Log.Write("opening the Default apps page for " + AppPaths.ProductName);
+                    ui.LaunchAdvancedAssociationUI(AppPaths.ProductName);
+                    return true;
+                }
+                finally { Marshal.ReleaseComObject(ui); }
+            }
+            catch (COMException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
+            catch (InvalidCastException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
+            catch (NotSupportedException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
+        }
+
+        private static readonly Guid AssociationUiClsid = new Guid("1968106d-f3b5-44cf-890e-116fcb9ecef1");
+
+        /// <summary>
+        /// Fires the app's own scheme once, to prove routing works end to end. Only meaningful
+        /// after the handler has been set; before that Windows silently does nothing.
+        /// </summary>
+        internal static bool SelfTest(string scheme)
         {
             if (string.IsNullOrWhiteSpace(scheme)) return false;
             try
             {
-                using (Process.Start(new ProcessStartInfo(scheme + "://" + SelfTestHost) { UseShellExecute = true })) { }
-                Log.Write("opened " + scheme + ":// to bring up the handler chooser");
-                return true;
+                using (Process p = Process.Start(
+                           new ProcessStartInfo(scheme + "://" + SelfTestHost) { UseShellExecute = true }))
+                {
+                    Log.Write("self-test link opened for " + scheme + "://");
+                    return p != null;
+                }
             }
-            catch (System.ComponentModel.Win32Exception ex) { Log.Write("chooser failed: " + ex.Message); return false; }
-            catch (InvalidOperationException ex) { Log.Write("chooser failed: " + ex.Message); return false; }
+            catch (System.ComponentModel.Win32Exception ex) { Log.Write("self-test failed: " + ex.Message); return false; }
+            catch (InvalidOperationException ex) { Log.Write("self-test failed: " + ex.Message); return false; }
         }
 
         /// <summary>

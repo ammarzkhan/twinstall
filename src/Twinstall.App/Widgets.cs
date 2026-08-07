@@ -193,7 +193,7 @@ namespace Twinstall.App
 
         internal SettingsHint()
         {
-            Height = 168;
+            Height = 112;
             Font = Theme.Body;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint
                    | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw
@@ -208,20 +208,30 @@ namespace Twinstall.App
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
             int y = 0;
-            y = Row(g, y, "1", "Type  " + Scheme + "  into the FIRST search box,",
-                    "the one under “Set a default for a file type or link type”.", DrawSearchBox);
-            y = Row(g, y, "2", "A row appears saying “Choose a default”.", "Click it.", DrawChooseRow);
-            Row(g, y, "3", "Pick Twinstall from the list, then choose Set default.", null, DrawPickRow);
+            y = Row(g, y, "1", "Under " + Scheme.ToUpperInvariant() + ", click “Choose a default”.",
+                    null, DrawChooseRow);
+            Row(g, y, "2", "Pick Twinstall, then choose Set default.", null, DrawPickRow);
         }
 
         private int Row(Graphics g, int y, string number, string line1, string line2,
                         Action<Graphics, Rectangle> glyph)
         {
-            // numbered disc
+            // Numbered disc. GDI+ DrawString with a centred StringFormat rather than
+            // TextRenderer: TextRenderer's centring is computed from the font's full line box,
+            // including ascent it does not use, which leaves a single digit sitting visibly
+            // high and left inside a 22px circle.
+            var disc = new RectangleF(0, y + 8, 22, 22);
             using (var b = new SolidBrush(Theme.Accent))
-                g.FillEllipse(b, 0, y + 8, 22, 22);
-            TextRenderer.DrawText(g, number, Theme.Small, new Rectangle(0, y + 8, 22, 22), Theme.AccentText,
-                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+                g.FillEllipse(b, disc);
+            using (var fb = new SolidBrush(Theme.AccentText))
+            using (var fmt = new StringFormat
+            {
+                Alignment = StringAlignment.Center,
+                LineAlignment = StringAlignment.Center
+            })
+            {
+                g.DrawString(number, Theme.Small, fb, disc, fmt);
+            }
 
             var box = new Rectangle(34, y + 4, 190, 30);
             glyph(g, box);
@@ -237,25 +247,6 @@ namespace Twinstall.App
                     TextFormatFlags.Left | TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis);
             }
             return y + 54;
-        }
-
-        private void DrawSearchBox(Graphics g, Rectangle r)
-        {
-            using (GraphicsPath p = Theme.RoundedRect(r, 5))
-            using (var b = new SolidBrush(Theme.Surface))
-            using (var pen = new Pen(Theme.Accent, 1.6f))
-            {
-                g.FillPath(b, p);
-                g.DrawPath(pen, p);
-            }
-            // magnifier
-            using (var pen = new Pen(Theme.TextMuted, 1.5f))
-            {
-                g.DrawEllipse(pen, r.X + 9, r.Y + 9, 9, 9);
-                g.DrawLine(pen, r.X + 17, r.Y + 17, r.X + 21, r.Y + 21);
-            }
-            TextRenderer.DrawText(g, Scheme, Theme.Body, new Rectangle(r.X + 28, r.Y, r.Width - 34, r.Height),
-                Theme.Text, TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
         }
 
         private void DrawChooseRow(Graphics g, Rectangle r)
