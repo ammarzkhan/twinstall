@@ -4,23 +4,11 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Twinstall.Core;
 
 namespace Twinstall.App
 {
-    /// <summary>
-    /// Shell API for "let the user pick defaults for this registered application". Declared
-    /// here rather than in Twinstall.Platform because it drives UI, and Platform observes.
-    /// </summary>
-    [ComImport]
-    [Guid("1f76a169-f994-40ac-8fc8-0959e8874710")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    internal interface IApplicationAssociationRegistrationUI
-    {
-        void LaunchAdvancedAssociationUI([MarshalAs(UnmanagedType.LPWStr)] string appRegistryName);
-    }
 
     /// <summary>
     /// Everything Twinstall changes outside its own folder, in one place, so it can all be
@@ -203,46 +191,52 @@ namespace Twinstall.App
         }
 
         /// <summary>
-        /// Opens Settings **on Twinstall's own Default-apps page**, where the scheme is listed
-        /// with a single "Choose a default" row.
+        /// Opens Settings **on Twinstall's own Default-apps page**, where the scheme is the only
+        /// thing listed and "Choose a default" is one click away.
         ///
-        /// This replaces two approaches that did not work. Opening a link of the scheme does
-        /// nothing at all when nothing is registered for it — ShellExecute returns without
-        /// starting anything and without an error, because Windows has no "how do you want to
-        /// open this?" chooser for URL protocols the way it does for unknown file types. And
-        /// the plain ms-settings:defaultapps page drops the user in front of two search boxes,
-        /// where typing the scheme into the wrong one silently reports finding nothing.
+        /// Three approaches were tried; only this one works, and the failures are recorded so
+        /// they are not attempted again:
         ///
-        /// This is the documented API for the job, and it lands exactly where it should.
+        /// - Opening a link of the scheme does nothing at all while nothing is registered for
+        ///   it. ShellExecute returns without starting anything and without raising an error —
+        ///   Windows has no "how do you want to open this?" chooser for URL protocols, only for
+        ///   unknown file types.
+        /// - IApplicationAssociationRegistrationUI::LaunchAdvancedAssociationUI, which is the
+        ///   API documented for exactly this, now shows a message box reading "To change your
+        ///   default apps, go to Settings > Apps > Default apps" and opens nothing. It is
+        ///   deprecated in all but name.
+        /// - Plain ms-settings:defaultapps lands on a page with two search boxes, where typing
+        ///   the scheme into the wrong one reports finding nothing.
         ///
-        /// It blocks until the user closes Settings, so callers must not run it on the UI
-        /// thread.
+        /// The registeredAppUser parameter is the value name under RegisteredApplications, so
+        /// it must stay in step with <see cref="RegisterProtocol"/>.
         /// </summary>
         internal static bool OpenOurDefaultsPage()
         {
-            try
+            string uri = "ms-settings:defaultapps?registeredAppUser="
+                       + Uri.EscapeDataString(AppPaths.ProductName);
+
+            if (Launch(uri))
             {
-                Type t = Type.GetTypeFromCLSID(AssociationUiClsid);
-                if (t == null) return false;
-
-                object o = Activator.CreateInstance(t);
-                var ui = o as IApplicationAssociationRegistrationUI;
-                if (ui == null) return false;
-
-                try
-                {
-                    Log.Write("opening the Default apps page for " + AppPaths.ProductName);
-                    ui.LaunchAdvancedAssociationUI(AppPaths.ProductName);
-                    return true;
-                }
-                finally { Marshal.ReleaseComObject(ui); }
+                Log.Write("opened the Default apps page for " + AppPaths.ProductName);
+                return true;
             }
-            catch (COMException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
-            catch (InvalidCastException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
-            catch (NotSupportedException ex) { Log.Write("association UI failed: " + ex.Message); return false; }
+
+            // Better the generic page than nothing at all.
+            Log.Write("deep link failed; falling back to the generic Default apps page");
+            return Launch("ms-settings:defaultapps");
         }
 
-        private static readonly Guid AssociationUiClsid = new Guid("1968106d-f3b5-44cf-890e-116fcb9ecef1");
+        private static bool Launch(string uri)
+        {
+            try
+            {
+                using (Process.Start(new ProcessStartInfo(uri) { UseShellExecute = true })) { }
+                return true;
+            }
+            catch (System.ComponentModel.Win32Exception ex) { Log.Write("could not open " + uri + ": " + ex.Message); return false; }
+            catch (InvalidOperationException ex) { Log.Write("could not open " + uri + ": " + ex.Message); return false; }
+        }
 
         /// <summary>
         /// Fires the app's own scheme once, to prove routing works end to end. Only meaningful

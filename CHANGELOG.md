@@ -41,19 +41,26 @@ one step that matters was the one the app was quietest about.
 
 ### Added
 
-- **One button that lands on the right page.** `IApplicationAssociationRegistrationUI::`
-  `LaunchAdvancedAssociationUI` opens Settings at *Apps → Default apps → Twinstall*, where the
-  scheme is the only thing listed and "Choose a default" is one click away. No searching.
+- **One button that lands on the right page.**
+  `ms-settings:defaultapps?registeredAppUser=Twinstall` opens Settings at
+  *Apps → Default apps → Twinstall*, where the scheme is the only thing listed and
+  "Choose a default" is one click away. No searching, and no instructions for navigating there
+  by hand — a button that opens the page makes them noise.
 
-  Two earlier attempts did not work and are recorded so they are not retried. Opening a link of
-  the scheme does **nothing at all** when nothing is registered for it — `ShellExecute` returns
-  without starting anything and without raising an error, because Windows has no "how do you
-  want to open this?" chooser for URL protocols the way it does for unknown file types. And the
-  plain `ms-settings:defaultapps` page drops the user in front of two search boxes, where typing
-  the scheme into the wrong one reports "We couldn't find anything to show here".
+  Three approaches were tried; the two failures are recorded so nobody repeats them:
 
-  The call blocks until Settings closes, so it runs off the UI thread — and returning from it is
-  a good moment to re-check.
+  - **Opening a link of the scheme does nothing** while nothing is registered for it.
+    `ShellExecute` returns without starting anything *and without raising an error*. Windows
+    has a "how do you want to open this?" chooser for unknown file types, not for URL protocols.
+  - **`IApplicationAssociationRegistrationUI::LaunchAdvancedAssociationUI`**, the API documented
+    for precisely this, now shows a message box reading *"To change your default apps, go to
+    Settings > Apps > Default apps"* and opens nothing. Deprecated in all but name.
+  - Plain `ms-settings:defaultapps` lands on a page with two search boxes, where typing the
+    scheme into the wrong one reports "We couldn't find anything to show here".
+
+  Windows blocks programmatic changes to this setting deliberately — it is how browsers used to
+  hijack one another — so no app can set it for the user. Being one click away is the ceiling,
+  and that is what this now achieves.
 
 - **A drawn walkthrough of the two remaining clicks**, as a schematic rather than a screenshot:
   a picture of the Settings app would be Microsoft's artwork inside our binary, which is the

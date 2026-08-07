@@ -719,7 +719,7 @@ namespace Twinstall.App
             // the failure is silent and confusing — a sign-in quietly opening the wrong account.
             // The way out is the X, which offers to undo everything rather than leave a
             // half-configured machine.
-            _next.Text = needsHandler ? "Choose Twinstall" : "Finish";
+            _next.Text = needsHandler ? "Open Settings" : "Finish";
             _next.Enabled = true;
 
             int y = AddFact(0, true, _lastShortcuts.ToString(CultureInfo.InvariantCulture)
@@ -749,26 +749,24 @@ namespace Twinstall.App
             y = AddFact(y, false, "Nothing is handling " + _config.Scheme
                                   + ":// yet — sign-ins will still go to the wrong account");
 
-            y = AddNote(y + 4, "Windows only lets you choose this yourself; no app is allowed to set it "
-                             + "for you. The button below opens Settings on Twinstall's own page, where "
-                             + _config.Scheme + ":// is the only thing listed.");
+            // Windows protects this setting against being changed programmatically, on purpose:
+            // it is how browsers used to hijack each other. So the user has to click it, and the
+            // most we can do is put them one click away. Say that once, briefly, and no more —
+            // telling someone how to navigate to a page the button already opens is noise.
+            y = AddNote(y + 4, "Windows won't let any app set this for itself. "
+                             + "The button below opens the exact page — two clicks and you're done.");
 
-            var choose = new FlatButton("Open Settings here", ButtonKind.Secondary)
+            var steps = new Label
             {
-                Location = new Point(0, y),
-                Size = new Size(190, 40)
+                Text = "In the Settings window that opens:",
+                Font = Theme.BodyStrong,
+                ForeColor = Theme.Text,
+                AutoSize = false,
+                Location = new Point(2, y),
+                Size = new Size(_content.Width - 30, 22)
             };
-            choose.Click += (s, e) => OpenDefaultsPage();
-            _content.Controls.Add(choose);
-
-            var recheck = new FlatButton("Check again", ButtonKind.Subtle)
-            {
-                Location = new Point(200, y),
-                Size = new Size(140, 40)
-            };
-            recheck.Click += (s, e) => ShowLater(Step.Done);
-            _content.Controls.Add(recheck);
-            y += 52;
+            _content.Controls.Add(steps);
+            y += 28;
 
             var hint = new SettingsHint
             {
@@ -777,22 +775,24 @@ namespace Twinstall.App
                 Width = Math.Max(200, _content.Width - 26)
             };
             _content.Controls.Add(hint);
+            y += hint.Height + 4;
 
-            AddLogButton(y + hint.Height + 4);
-            Say("This window re-checks by itself whenever you come back to it.");
+            var recheck = new FlatButton("Check again", ButtonKind.Subtle)
+            {
+                Location = new Point(-6, y),
+                Size = new Size(140, 36)
+            };
+            recheck.Click += (s, e) => ShowLater(Step.Done);
+            _content.Controls.Add(recheck);
+
+            AddLogButton(y + 40);
+            Say("Come back here afterwards — this window re-checks by itself.");
         }
 
-        /// <summary>
-        /// LaunchAdvancedAssociationUI blocks until Settings is closed, so it cannot run on the
-        /// UI thread — doing so freezes this window for as long as the user is choosing.
-        /// </summary>
-        private async void OpenDefaultsPage()
+        private void OpenDefaultsPage()
         {
-            Say("Opening Settings on Twinstall's page…");
-            await Task.Run(() => Registration.OpenOurDefaultsPage()).ConfigureAwait(true);
-
-            // Control returns when Settings closes, which is the natural moment to re-check.
-            if (!IsDisposed && _step == Step.Done) ShowLater(Step.Done);
+            Registration.OpenOurDefaultsPage();
+            Say("Settings is open on Twinstall's page — do the two steps above, then come back.");
         }
 
         private void AddLogButton(int y)
