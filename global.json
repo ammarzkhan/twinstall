@@ -1,0 +1,19 @@
+{
+  "//": [
+    "Pins the build to a .NET 8 SDK.",
+    "",
+    "Without this, `dotnet` selects the HIGHEST SDK installed on the machine. GitHub's",
+    "windows runners ship newer SDKs alongside the one setup-dotnet installs, so CI was",
+    "compiling with a different Roslyn — and therefore a different analyser set — than a",
+    "developer running the identical command locally. The symptom was a build that is",
+    "clean on a workstation and fails CI on a rule that never fired at home, which is the",
+    "worst kind of red: nothing local reproduces it.",
+    "",
+    "rollForward latestFeature keeps this on .NET 8 while still accepting any 8.0.x a",
+    "contributor happens to have, rather than demanding one exact patch nobody has."
+  ],
+  "sdk": {
+    "version": "8.0.100",
+    "rollForward": "latestFeature"
+  }
+}

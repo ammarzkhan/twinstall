@@ -272,7 +272,7 @@ namespace Twinstall.Platform
         /// Multi-frame ICO with PNG payloads, which Vista and later accept for every size and
         /// which keeps the 256px frame small.
         /// </summary>
-        private static void WriteIco(IList<Bitmap> frames, string path)
+        private static void WriteIco(List<Bitmap> frames, string path)
         {
             var payloads = new List<byte[]>();
             foreach (Bitmap frame in frames)
