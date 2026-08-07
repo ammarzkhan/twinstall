@@ -67,6 +67,35 @@ namespace Twinstall.App
                         return 0;
                     }
 
+                    // What Settings → Apps → Installed apps invokes.
+                    if (string.Equals(first, "--uninstall", StringComparison.OrdinalIgnoreCase))
+                        return Uninstaller.Run();
+
+                    // Re-applies everything from the saved config against *this* copy of the
+                    // executable. The reason it exists: shortcuts and the registered handler
+                    // record an absolute path, so moving Twinstall — or setting it up from a
+                    // build output and later installing it properly — silently breaks both.
+                    if (string.Equals(first, "--repair", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Twinstall.Core.AppConfig cfg = Twinstall.Core.InstanceConfig.Load(AppPaths.ConfigFile);
+                        if (string.IsNullOrWhiteSpace(cfg.ExePath))
+                        {
+                            Log.Write("--repair: nothing configured");
+                            return 1;
+                        }
+
+                        int icons = Router.ComposeIcons(cfg);
+                        int links = Registration.CreateShortcuts(cfg, alsoOnDesktop: true);
+                        bool proto = Registration.RegisterProtocol(cfg.Scheme);
+                        Registration.RegisterUninstallEntry();
+
+                        Log.Write("--repair: re-pointed at " + AppPaths.SelfExe
+                                  + " (" + icons.ToString(CultureInfo.InvariantCulture) + " icons, "
+                                  + links.ToString(CultureInfo.InvariantCulture) + " shortcuts, protocol="
+                                  + proto + ")");
+                        return proto ? 0 : 1;
+                    }
+
                     if (string.Equals(first, "--version", StringComparison.OrdinalIgnoreCase))
                     {
                         Ui.Info("Twinstall " + typeof(Program).Assembly.GetName().Version);

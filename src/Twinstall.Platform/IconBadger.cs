@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -8,13 +9,29 @@ using System.IO;
 namespace Twinstall.Platform
 {
     /// <summary>
-    /// Chrome-style profile badging: the app's own logo, untouched, with a small coloured disc
-    /// in the corner. The badge is vector geometry so it stays crisp at every taskbar size, and
-    /// the source logo is read from the user's installed copy — no third-party artwork ships.
+    /// Chrome-style profile badging: the app's own logo with a large coloured disc in the
+    /// corner. The source logo is read from the user's installed copy — no third-party artwork
+    /// ships with Twinstall.
+    ///
+    /// Every size in the icon is drawn at that size. That sounds obvious and was not what this
+    /// did: it used to write a single 256px frame and leave Windows to shrink it to 16px, which
+    /// Windows does badly — the result on a taskbar was visibly blocky, with a ragged disc and
+    /// a smeared logo. A 16px frame composed at 16px is a different image from a 256px frame
+    /// resampled, and only the first one looks like an icon.
     /// </summary>
     public static class IconBadger
     {
         public const int Size = 256;
+
+        /// <summary>
+        /// The frames an .ico carries. Windows picks per context: 16 in the taskbar and title
+        /// bar, 32 for Alt-Tab and medium list views, 48 for the desktop, 256 for large tiles.
+        /// Anything missing gets scaled from a neighbour, which is what caused the blockiness.
+        /// </summary>
+        public static readonly int[] IconSizes = { 256, 128, 64, 48, 40, 32, 24, 20, 16 };
+
+        /// <summary>Below this the letter is a smudge, so the disc carries the meaning alone.</summary>
+        private const int SmallestWithLabel = 24;
 
         public static void Compose(string sourceImagePath, string outputIcoPath, string hexColour, string label)
         {
@@ -35,78 +52,129 @@ namespace Twinstall.Platform
         /// </summary>
         public static void Compose(Image source, string outputIcoPath, string hexColour, string label)
         {
-            using (var bmp = new Bitmap(Size, Size, PixelFormat.Format32bppArgb))
+            var frames = new List<Bitmap>();
+            try
             {
-                using (var g = Graphics.FromImage(bmp))
-                {
-                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-                    g.SmoothingMode     = SmoothingMode.AntiAlias;
-                    g.PixelOffsetMode   = PixelOffsetMode.HighQuality;
-                    g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
-                    g.Clear(Color.Transparent);
-
-                    // The badge sits TOP-RIGHT and is deliberately large.
-                    //
-                    // At taskbar size the coloured disc is the only thing telling two windows
-                    // of the same application apart, and a taskbar icon is 16-24px. A
-                    // Chrome-style corner dot at 46% of the canvas comes out as a handful of
-                    // pixels there — technically present, useless in practice. Top-right also
-                    // keeps it clear of the taskbar's own running-app underline and of the
-                    // overflow chevron.
-                    //
-                    // The logo is pushed down-left to make room rather than scaled smaller in
-                    // place, so it stays as large as it can while leaving the corner free.
-                    const int inset = 34;
-                    int baseSize = Size - inset;
-                    if (source != null)
-                        g.DrawImage(source, 0, inset, baseSize, baseSize);
-
-                    int d = (int)(Size * 0.56);
-                    int x = Size - d - 2, y = 2, halo = 9;
-
-                    using (var white = new SolidBrush(Color.White))
-                    using (var fill  = new SolidBrush(ColorTranslator.FromHtml(hexColour)))
-                    {
-                        g.FillEllipse(white, x - halo, y - halo, d + halo * 2, d + halo * 2);
-                        g.FillEllipse(fill, x, y, d, d);
-
-                        if (!string.IsNullOrEmpty(label))
-                        {
-                            using (var font = new Font("Segoe UI", d * 0.60f, FontStyle.Bold, GraphicsUnit.Pixel))
-                            using (var fmt = new StringFormat { Alignment = StringAlignment.Center,
-                                                               LineAlignment = StringAlignment.Center })
-                                g.DrawString(label.Substring(0, 1).ToUpperInvariant(), font, white,
-                                             new RectangleF(x, y + 2, d, d), fmt);
-                        }
-                    }
-                }
-                WriteIco(bmp, outputIcoPath);
+                foreach (int size in IconSizes) frames.Add(Render(source, size, hexColour, label));
+                WriteIco(frames, outputIcoPath);
+            }
+            finally
+            {
+                foreach (Bitmap b in frames) b.Dispose();
             }
         }
 
-        /// <summary>Single-entry ICO wrapping a PNG. Supported since Vista.</summary>
-        static void WriteIco(Bitmap bmp, string path)
+        /// <summary>
+        /// One frame, composed at its final size. All geometry is a fraction of that size, so
+        /// the badge occupies the same proportion whether it is 16px or 256px.
+        /// </summary>
+        private static Bitmap Render(Image source, int size, string hexColour, string label)
         {
-            byte[] png;
-            using (var ms = new MemoryStream())
+            var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(bmp))
             {
-                bmp.Save(ms, ImageFormat.Png);
-                png = ms.ToArray();
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode     = SmoothingMode.AntiAlias;
+                g.PixelOffsetMode   = PixelOffsetMode.HighQuality;
+                g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+                g.Clear(Color.Transparent);
+
+                // The disc is 66% of the icon and sits top-right. It is the only thing telling
+                // two windows of the same application apart, and a taskbar button is 16px — a
+                // tasteful corner dot there is a few pixels of nothing. Top-right also stays
+                // clear of the taskbar's own running-app underline along the bottom edge.
+                float d = size * 0.66f;
+                float inset = size * 0.16f;
+                float logo = size - inset;
+
+                if (source != null)
+                    g.DrawImage(source, 0, inset, logo, logo);
+
+                float x = size - d - (size * 0.012f);
+                float y = size * 0.012f;
+                float halo = Math.Max(1f, size * 0.030f);
+
+                using (var white = new SolidBrush(Color.White))
+                using (var fill = new SolidBrush(ParseColour(hexColour)))
+                {
+                    // The white ring separates the disc from whatever the logo does underneath,
+                    // so the colour reads cleanly against dark and light artwork alike.
+                    g.FillEllipse(white, x - halo, y - halo, d + (halo * 2), d + (halo * 2));
+                    g.FillEllipse(fill, x, y, d, d);
+
+                    if (size >= SmallestWithLabel && !string.IsNullOrEmpty(label))
+                    {
+                        using (var font = new Font("Segoe UI", d * 0.62f, FontStyle.Bold, GraphicsUnit.Pixel))
+                        using (var fmt = new StringFormat
+                        {
+                            Alignment = StringAlignment.Center,
+                            LineAlignment = StringAlignment.Center
+                        })
+                        {
+                            g.DrawString(label.Substring(0, 1).ToUpperInvariant(), font, white,
+                                         new RectangleF(x, y + (size * 0.012f), d, d), fmt);
+                        }
+                    }
+                }
+            }
+            return bmp;
+        }
+
+        private static Color ParseColour(string hex)
+        {
+            try { return ColorTranslator.FromHtml(hex); }
+            catch (ArgumentException) { return Color.MediumPurple; }
+            catch (FormatException) { return Color.MediumPurple; }
+        }
+
+        /// <summary>
+        /// Multi-frame ICO with PNG payloads, which Vista and later accept for every size and
+        /// which keeps the 256px frame small.
+        /// </summary>
+        private static void WriteIco(IList<Bitmap> frames, string path)
+        {
+            var payloads = new List<byte[]>();
+            foreach (Bitmap frame in frames)
+            {
+                using (var ms = new MemoryStream())
+                {
+                    frame.Save(ms, ImageFormat.Png);
+                    payloads.Add(ms.ToArray());
+                }
             }
 
             if (File.Exists(path))
             {
-                try { File.SetAttributes(path, FileAttributes.Normal); File.Delete(path); } catch { }
+                try { File.SetAttributes(path, FileAttributes.Normal); File.Delete(path); }
+                catch (IOException) { /* held by a running instance; the write below will say so */ }
+                catch (UnauthorizedAccessException) { }
             }
 
             using (var fs = File.Create(path))
             using (var w = new BinaryWriter(fs))
             {
-                w.Write((ushort)0); w.Write((ushort)1); w.Write((ushort)1);
-                w.Write((byte)0); w.Write((byte)0); w.Write((byte)0); w.Write((byte)0);
-                w.Write((ushort)1); w.Write((ushort)32);
-                w.Write((uint)png.Length); w.Write((uint)22);
-                w.Write(png, 0, png.Length);
+                w.Write((ushort)0);                    // reserved
+                w.Write((ushort)1);                    // type: icon
+                w.Write((ushort)payloads.Count);
+
+                int offset = 6 + (16 * payloads.Count);
+                for (int i = 0; i < payloads.Count; i++)
+                {
+                    int dim = frames[i].Width >= 256 ? 0 : frames[i].Width;   // 0 means 256
+                    w.Write((byte)dim);
+                    w.Write((byte)dim);
+                    w.Write((byte)0);                  // palette
+                    w.Write((byte)0);                  // reserved
+                    w.Write((ushort)1);                // colour planes
+                    w.Write((ushort)32);               // bits per pixel
+                    w.Write((uint)payloads[i].Length);
+                    w.Write((uint)offset);
+                    offset += payloads[i].Length;
+                }
+
+                // Write(byte[], int, int), never Write(object[]) — the latter compiles and
+                // silently emits one byte. There is a byte-level test for exactly this.
+                foreach (byte[] png in payloads) w.Write(png, 0, png.Length);
             }
         }
 

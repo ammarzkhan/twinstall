@@ -725,6 +725,9 @@ namespace Twinstall.App
             if (_taskbarOptIn != Registration.TaskbarNeverCombine())
                 Registration.SetTaskbarNeverCombine(_taskbarOptIn);
 
+            // So it can be removed from Settings like anything else, not only from in here.
+            Registration.RegisterUninstallEntry();
+
             Log.Write("setup applied: " + _config.Instances.Count + " accounts, "
                       + icons + " icons, " + shortcuts + " shortcuts");
 
@@ -968,6 +971,7 @@ namespace Twinstall.App
             AppConfig saved = InstanceConfig.Load(AppPaths.ConfigFile);
             Registration.RemoveAllRegistration(saved);
             Registration.RemoveShortcuts(saved);
+            Registration.RemoveUninstallEntry();
 
             // Only revert the taskbar setting if this run turned it on.
             if (_taskbarOptIn && !_taskbarWasOnBefore) Registration.SetTaskbarNeverCombine(false);

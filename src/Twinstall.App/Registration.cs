@@ -481,6 +481,100 @@ namespace Twinstall.App
             }
         }
 
+        // ------------------------------------------------------- add/remove programs --
+        private const string UninstallKey =
+            @"Software\Microsoft\Windows\CurrentVersion\Uninstall\Twinstall";
+
+        /// <summary>
+        /// Puts Twinstall in Settings → Apps → Installed apps, so it can be removed the way
+        /// every other program is removed. Without this the only uninstaller is a button inside
+        /// the app, which nobody thinks to look for once they have decided to get rid of it.
+        ///
+        /// Per-user (HKCU), so no elevation and nothing left behind for other accounts.
+        /// </summary>
+        internal static void RegisterUninstallEntry()
+        {
+            string exe = AppPaths.SelfExe;
+            string dir = Path.GetDirectoryName(exe);
+
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(UninstallKey))
+                {
+                    key.SetValue("DisplayName", AppPaths.ProductName);
+                    key.SetValue("DisplayVersion",
+                        typeof(Registration).Assembly.GetName().Version?.ToString(3) ?? "0.0.0");
+                    key.SetValue("Publisher", AppPaths.ProductName);
+                    key.SetValue("DisplayIcon", exe + ",0");
+                    key.SetValue("UninstallString", "\"" + exe + "\" --uninstall");
+                    key.SetValue("NoModify", 1, RegistryValueKind.DWord);
+                    key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
+                    if (!string.IsNullOrEmpty(dir)) key.SetValue("InstallLocation", dir);
+                }
+                Log.Write("registered in Installed apps");
+            }
+            catch (UnauthorizedAccessException ex) { Log.Write("uninstall entry failed: " + ex.Message); }
+            catch (System.Security.SecurityException ex) { Log.Write("uninstall entry failed: " + ex.Message); }
+            catch (IOException ex) { Log.Write("uninstall entry failed: " + ex.Message); }
+        }
+
+        internal static void RemoveUninstallEntry()
+        {
+            try
+            {
+                using (RegistryKey k = Registry.CurrentUser.OpenSubKey(
+                           @"Software\Microsoft\Windows\CurrentVersion\Uninstall", true))
+                {
+                    k?.DeleteSubKeyTree("Twinstall", throwOnMissingSubKey: false);
+                }
+            }
+            catch (UnauthorizedAccessException ex) { Log.Write("uninstall entry removal failed: " + ex.Message); }
+            catch (System.Security.SecurityException ex) { Log.Write("uninstall entry removal failed: " + ex.Message); }
+            catch (IOException ex) { Log.Write("uninstall entry removal failed: " + ex.Message); }
+        }
+
+        /// <summary>
+        /// Deletes Twinstall's own program folder after the process exits, since a running
+        /// executable cannot delete itself.
+        ///
+        /// Guarded hard, because this ends in `rmdir /s /q`: it will only ever touch a folder
+        /// named Twinstall directly beneath %LOCALAPPDATA%\Programs. Anywhere else — a build
+        /// output, a copy on the desktop, Program Files — is left alone and reported, which is
+        /// the right outcome for something that was never really "installed" there.
+        /// </summary>
+        internal static bool ScheduleSelfDelete()
+        {
+            string dir = Path.GetDirectoryName(AppPaths.SelfExe);
+            if (string.IsNullOrEmpty(dir) || !IsOurProgramFolder(dir))
+            {
+                Log.Write("not deleting " + (dir ?? "(unknown)") + " — not our install folder");
+                return false;
+            }
+
+            try
+            {
+                // ping rather than timeout: timeout needs a console and fails without one.
+                var psi = new ProcessStartInfo("cmd.exe",
+                    "/c ping 127.0.0.1 -n 3 >nul & rmdir /s /q \"" + dir + "\"")
+                {
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+                using (Process.Start(psi)) { }
+                Log.Write("scheduled removal of " + dir);
+                return true;
+            }
+            catch (System.ComponentModel.Win32Exception ex) { Log.Write("self-delete failed: " + ex.Message); return false; }
+            catch (InvalidOperationException ex) { Log.Write("self-delete failed: " + ex.Message); return false; }
+        }
+
+        /// <summary>%LOCALAPPDATA%\Programs\Twinstall, and nothing else.</summary>
+        internal static bool IsOurProgramFolder(string dir)
+        {
+            string expected = PathUtil.Join(AppPaths.LocalAppData, "Programs", AppPaths.ProductName);
+            return PathUtil.SamePath(dir, expected);
+        }
+
         /// <summary>A plain-language list of what setup will change. Shown before it happens.</summary>
         internal static IList<string> DescribeChanges(AppConfig cfg, bool taskbarOptIn, bool desktopShortcuts)
         {
