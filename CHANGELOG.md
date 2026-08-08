@@ -2,6 +2,25 @@
 
 Notable changes to Twinstance. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed — installing from a build tree produced a copy that could not launch an account
+
+**Released builds were never affected**, which is why this survived unnoticed: `publish.ps1` sets
+`PublishSingleFile`, and the bundle carries everything. It only ever bit an install made from a
+framework-dependent build output — which is what anyone working on Twinstance has.
+
+`CopyProgram` copied the flat files plus `presets`, and skipped every other folder. But the
+`System.Management.dll` sitting beside the executable in a build tree is the 73 KB *reference*
+assembly; the real Windows implementation is the 312 KB one under `runtimes\win\lib\net8.0`, and
+`deps.json` points the .NET host at it through `runtimeTargets`. The installed copy therefore
+started, drew its window and badged icons, then died with `FileNotFoundException` the moment
+anything enumerated processes — which is the launch path, so every account shortcut was broken
+while the application itself looked healthy.
+
+`runtimes` is now copied too, recursively, because `runtimes\win\lib\net8.0` is four levels down
+and the previous single-level copy would have produced an empty folder.
+
 ## [0.4.1] — 2026-08-08
 
 ### Fixed — a Store update no longer breaks the setup

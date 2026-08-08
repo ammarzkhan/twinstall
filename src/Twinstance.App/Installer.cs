@@ -98,15 +98,42 @@ namespace Twinstance.App
             foreach (string dir in Directory.GetDirectories(from))
             {
                 string name = Path.GetFileName(dir);
-                // Only the folders the app actually reads. A downloads folder can contain
-                // anything, and copying it wholesale is not this program's business.
-                if (!string.Equals(name, "presets", StringComparison.OrdinalIgnoreCase)) continue;
 
-                string target = Path.Combine(InstallDirectory, name);
-                Directory.CreateDirectory(target);
-                foreach (string file in Directory.GetFiles(dir))
-                    File.Copy(file, Path.Combine(target, Path.GetFileName(file)), overwrite: true);
+                // Only the folders this program reads, or the .NET host loads from. A downloads
+                // folder can contain anything, and copying it wholesale is not our business.
+                //
+                // 'runtimes' is not optional, despite nothing here ever reading it. In a
+                // framework-dependent build the System.Management.dll sitting beside the
+                // executable is the 73 KB *reference* assembly; the real Windows implementation
+                // is the 312 KB one under runtimes\win\lib\net8.0, and deps.json points the host
+                // at it through runtimeTargets. Copying only the flat files produced an install
+                // that started, drew its window and badged icons, then died with
+                // FileNotFoundException the moment anything enumerated processes — which is the
+                // launch path, so every account shortcut was broken.
+                //
+                // Released builds never hit this: publish.ps1 sets PublishSingleFile, and the
+                // bundle carries the implementation. It only ever bit an install made from a
+                // build tree, which is why it survived to 0.4.1 unnoticed.
+                if (!string.Equals(name, "presets", StringComparison.OrdinalIgnoreCase)
+                 && !string.Equals(name, "runtimes", StringComparison.OrdinalIgnoreCase)) continue;
+
+                CopyTree(dir, Path.Combine(InstallDirectory, name));
             }
+        }
+
+        /// <summary>
+        /// Recursive, because runtimes\win\lib\net8.0 is four levels down. The previous
+        /// single-level copy silently produced an empty runtimes folder.
+        /// </summary>
+        private static void CopyTree(string from, string to)
+        {
+            Directory.CreateDirectory(to);
+
+            foreach (string file in Directory.GetFiles(from))
+                File.Copy(file, Path.Combine(to, Path.GetFileName(file)), overwrite: true);
+
+            foreach (string dir in Directory.GetDirectories(from))
+                CopyTree(dir, Path.Combine(to, Path.GetFileName(dir)));
         }
 
         /// <summary>
