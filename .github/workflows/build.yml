@@ -202,7 +202,13 @@ jobs:
           # what the software does, that the binaries are unsigned, how to verify them, and
           # what happens to your data — the last being a SignPath Foundation condition, and
           # worth stating plainly regardless.
+          # <version> in the template is filled in here. It is not optional decoration: without
+          # this the body shipped the placeholder verbatim, so v0.5.0 told people to download
+          # "Twinstall-<version>-standalone.exe". Tag names carry a leading v, filenames do not.
+          sed "s/<version>/${GITHUB_REF_NAME#v}/g" .github/RELEASE_NOTES.md > /tmp/notes.md
+          cat /tmp/notes.md
+
           gh release create "${GITHUB_REF_NAME}" \
             --title "Twinstall ${GITHUB_REF_NAME}" \
-            --notes-file .github/RELEASE_NOTES.md \
+            --notes-file /tmp/notes.md \
             artifacts/*.exe artifacts/SHA256SUMS.txt

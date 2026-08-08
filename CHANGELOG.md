@@ -2,7 +2,15 @@
 
 Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.5.1] — 2026-08-08
+
+### Fixed — the release page told you to download a file that does not exist
+
+The notes template carries a `<version>` placeholder and nothing was filling it in, so 0.5.0's
+release page named `Twinstall-<version>-standalone.exe` where the file is
+`Twinstall-0.5.0-standalone.exe`. The assets listed above it were right; the sentence pointing at
+them was not. The tag now substitutes it, and the rendered body is echoed into the build log so
+the next mistake of this shape is visible before anyone downloads anything.
 
 ### Fixed — narrowing the window pushed every row out of its panel
 
