@@ -89,10 +89,19 @@ namespace Twinstall.App
                         bool proto = Registration.RegisterProtocol(cfg.Scheme);
                         Registration.RegisterUninstallEntry();
 
+                        // The login entry records an absolute path too, so it goes stale in
+                        // exactly the way this switch exists to fix — and it was the one thing
+                        // --repair did not put back, which left badges silently dead after the
+                        // next sign-in with nothing on screen to say why.
+                        bool wantsBadges = false;
+                        foreach (Twinstall.Core.Instance i in cfg.Instances)
+                            if (i.Badge) { wantsBadges = true; break; }
+                        Registration.SetIconWatcher(wantsBadges);
+
                         Log.Write("--repair: re-pointed at " + AppPaths.SelfExe
                                   + " (" + icons.ToString(CultureInfo.InvariantCulture) + " icons, "
                                   + links.ToString(CultureInfo.InvariantCulture) + " shortcuts, protocol="
-                                  + proto + ")");
+                                  + proto + ", watcher=" + wantsBadges + ")");
                         return proto ? 0 : 1;
                     }
 
