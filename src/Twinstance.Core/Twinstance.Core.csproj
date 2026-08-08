@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Deliberately platform-neutral (net8.0, not net8.0-windows).
+
+    Everything in this assembly is pure decision logic: path comparison, package-name
+    derivation, command-line parsing, Chromium detection, isolation checks, config
+    parsing and route selection. None of it touches Win32, WMI or GDI+ — those live in
+    Twinstance.Platform.
+
+    The target framework enforces that boundary. If someone adds a Windows-only call
+    here the build fails rather than quietly making the core untestable off Windows,
+    which is exactly the failure we hit the first time these tests were run.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

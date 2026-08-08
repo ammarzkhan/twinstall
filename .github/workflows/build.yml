@@ -54,16 +54,16 @@ jobs:
           'PSScriptAnalyzer clean'
 
       - name: Restore
-        run: dotnet restore Twinstall.sln
+        run: dotnet restore Twinstance.sln
 
       - name: Build
-        run: dotnet build Twinstall.sln -c Release --no-restore
+        run: dotnet build Twinstance.sln -c Release --no-restore
 
       - name: Unit tests
         shell: pwsh
         run: |
           # Plain console runner: exit code is the result, no test adapter involved.
-          dotnet run --project src/Twinstall.Tests -c Release --no-build
+          dotnet run --project src/Twinstance.Tests -c Release --no-build
           if ($LASTEXITCODE -ne 0) { throw "unit tests failed (exit $LASTEXITCODE)" }
 
       - name: Analyser sweep
@@ -71,7 +71,7 @@ jobs:
         run: |
           # AnalysisMode=All alone does nothing here - AnalysisLevel in Directory.Build.props
           # re-derives the mode and wins, reporting a false clean. Use latest-all.
-          $out = dotnet build Twinstall.sln -c Release --no-incremental `
+          $out = dotnet build Twinstance.sln -c Release --no-incremental `
                    -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false 2>&1 | Out-String
 
           # Count DISTINCT warnings. MSBuild reports each one once per project that
@@ -138,7 +138,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: twinstall-artifacts
+          name: twinstance-artifacts
           path: |
             artifacts/*.exe
             artifacts/SHA256SUMS.txt
@@ -146,7 +146,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # Guards the architecture, not the product.
   #
-  # Twinstall.Core is declared platform-neutral (net8.0). This job proves it: if
+  # Twinstance.Core is declared platform-neutral (net8.0). This job proves it: if
   # anyone adds a Win32, WMI or GDI+ dependency to the decision logic, the build
   # or the tests fail here while the Windows job stays green — which is the only
   # way that mistake gets noticed early.
@@ -161,10 +161,10 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Build core and tests on Linux
-        run: dotnet build src/Twinstall.Tests -c Release
+        run: dotnet build src/Twinstance.Tests -c Release
 
       - name: Unit tests on Linux
-        run: dotnet run --project src/Twinstall.Tests -c Release --no-build
+        run: dotnet run --project src/Twinstance.Tests -c Release --no-build
 
   # ---------------------------------------------------------------------------
   # Tagged releases only. Publishes the single-file executables and their hashes.
@@ -185,7 +185,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          name: twinstall-artifacts
+          name: twinstance-artifacts
           path: artifacts
 
       - name: Create release
@@ -193,6 +193,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            --title "Twinstall ${GITHUB_REF_NAME}" \
+            --title "Twinstance ${GITHUB_REF_NAME}" \
             --notes "See CHANGELOG.md. These binaries are UNSIGNED — read SECURITY.md before running them, and verify against SHA256SUMS.txt." \
             artifacts/*.exe artifacts/SHA256SUMS.txt

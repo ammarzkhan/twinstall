@@ -151,7 +151,7 @@ silently taking over.
 **Read `AppxManifest.xml` off disk, not through `PackageManager`.**
 `C:\Program Files\WindowsApps\<PackageFullName>\AppxManifest.xml` is readable despite the folder's
 ACLs, and the `<uap3:Protocol Name="…" />` elements are right there. `PackageManager` would force
-`Twinstall.Platform` onto a `net8.0-windows10.0.19041.0` target and pull WinRT into the build;
+`Twinstance.Platform` onto a `net8.0-windows10.0.19041.0` target and pull WinRT into the build;
 parsing the XML keeps the logic in Core, unit-tested, and running on Ubuntu in CI. Match on the
 element's **local name** so any namespace prefix works.
 
@@ -170,8 +170,8 @@ is a valid outcome, not a failure.
 
 ## Step 5 — Verify before committing
 
-**Implemented.** `Twinstall.Core.LaunchProbe` holds the decisions and is unit-tested;
-`Twinstall.Platform.LaunchProbeRunner` starts the process and polls. Never yet run against a
+**Implemented.** `Twinstance.Core.LaunchProbe` holds the decisions and is unit-tested;
+`Twinstance.Platform.LaunchProbeRunner` starts the process and polls. Never yet run against a
 real application.
 
 Detection is inference. Prove it:
