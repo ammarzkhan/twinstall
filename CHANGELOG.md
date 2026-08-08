@@ -2,6 +2,33 @@
 
 Notable changes to Twinstance. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed — the only way to undo a setup was hidden on PCs with several apps installed
+
+"Remove Twinstance's changes" sat at the bottom of step 1, under the list of applications found
+on the PC — and the length of that list is decided by the machine, not by the program. Twinstance
+knows about twenty apps; a PC with five of them installed produced a page 502px tall inside a
+448px panel, so the button was below the fold, reachable only by scrolling. Nothing else in the
+window removes a setup once it is finished, and step 1 is the one screen nobody thinks to scroll:
+everything it asks for is at the top.
+
+**The button has moved into the footer**, on the left of the row that already holds Back and
+Continue. The footer is measured from the bottom edge of the window, so the button is in the same
+place whether the PC has one known app or twenty, and it cannot be pushed anywhere by the list
+above it. It still appears only when there is a saved setup to remove. The status line beside it
+gives up the width the button takes, and gets it all back on the screens where the button is
+absent — every other step's footer is unchanged, to the pixel.
+
+Two things follow from it no longer being page content:
+
+- **Step 1 now fits with no scrollbar at all** at the default window size on a five-app machine,
+  where before the scrollbar appeared purely because of this button.
+- **The button no longer destroys itself mid-click.** It used to be rebuilt with the page, and
+  removing a setup rebuilds the page — from inside the button's own `Click` handler, disposing
+  the control still executing it. That is the exact hazard `ShowLater` was added for. As
+  permanent chrome it is never disposed, so the deferral is not needed and the risk is gone.
+
 ## [0.4.0] — 2026-08-08
 
 ### Changed — the project is now called Twinstance
