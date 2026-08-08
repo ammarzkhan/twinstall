@@ -2,6 +2,33 @@
 
 Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed — the review screen hid the one warning it exists to give
+
+The taskbar option on step 4 changes a Windows setting that applies to **every application on
+the system**, not just the one being duplicated. The sentence saying so sat under the checkbox,
+at the bottom of the page, below a list whose length depends on the machine — and on a normal
+setup with two accounts that list is eight lines long, which pushed the sentence clean off the
+bottom of the panel. The checkbox was visible and the explanation was not, which is the wrong
+half to lose. Nothing was ever applied without asking, but the asking left out the part that
+matters.
+
+- **Both options now sit above the list of changes**, not below it. The list is the part that
+  varies — scheme, badges, and the two options each add a line — so it is the part that scrolls
+  when something has to. The two explanations are at a fixed place near the top and are on
+  screen at every window size down to the minimum.
+- **Line heights are measured rather than reserved.** Every bullet was given 34px — room for two
+  lines — because two of them are file paths that wrap when the window is narrow or the user's
+  name is long. The other six hold one 17px line and were given the same 34, wasting more space
+  than the page was over by. Heights now come from the text, so the long lines still wrap and the
+  short ones cost what they use. At the default window size the screen fits with no scrollbar.
+- **Ticking an option no longer moves it.** Each tick adds or removes a bullet; with the bullets
+  above, both checkboxes jumped a row on every click — the one just clicked slid out from under
+  the pointer, and the other took its place.
+- The taskbar checkbox rebuilt the page from inside its own event handler, disposing the control
+  still running it. It defers by one message now, like every other control on the page.
+
 ## [0.5.0] — 2026-08-08
 
 ### Fixed — installing from a build tree produced a copy that could not launch an account

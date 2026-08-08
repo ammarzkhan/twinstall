@@ -672,77 +672,102 @@ namespace Twinstall.App
             int y = AddNote(0, "Everything below is per-user. No administrator prompt, nothing outside your "
                              + "own profile, and all of it can be undone from this window.");
 
+            y = AddOption(y, "Also put shortcuts on the Desktop", _desktopShortcuts,
+                "Named “" + Registration.AppLabel(_config) + " - <account>” so they still make sense "
+              + "sitting among everything else. The Start-menu ones are added either way.",
+                on => _desktopShortcuts = on);
+
+            y = AddOption(y, "Also set Windows to never combine taskbar buttons", _taskbarOptIn,
+                "Needed for per-window icons. It affects every app on the system and only takes "
+              + "effect after you sign out and back in. Off by default, never changed silently.",
+                on => _taskbarOptIn = on);
+
+            y += 6;
             foreach (string line in Registration.DescribeChanges(_config, _taskbarOptIn, _desktopShortcuts))
             {
+                string text = "•   " + line;
+                int width = _content.Width - 30;
                 var l = new Label
                 {
-                    Text = "•   " + line,
+                    Text = text,
                     Font = Theme.Body,
                     ForeColor = Theme.Text,
                     AutoSize = false,
                     Location = new Point(4, y),
-                    Size = new Size(_content.Width - 30, 34)
+                    Size = new Size(width, MeasuredHeight(text, Theme.Body, width))
                 };
                 _content.Controls.Add(l);
-                y += 36;
+                y = l.Bottom + 8;
             }
 
-            var desktop = new CheckBox
-            {
-                Text = "  Also put shortcuts on the Desktop",
-                Font = Theme.Body,
-                ForeColor = Theme.Text,
-                BackColor = Theme.Background,
-                Checked = _desktopShortcuts,
-                AutoSize = false,
-                FlatStyle = FlatStyle.Standard,
-                Location = new Point(2, y + 10),
-                Size = new Size(_content.Width - 30, 26)
-            };
-            desktop.CheckedChanged += (s, e) => { _desktopShortcuts = desktop.Checked; ShowLater(Step.Review); };
-            _content.Controls.Add(desktop);
-
-            var desktopNote = new Label
-            {
-                Text = "Named “" + Registration.AppLabel(_config) + " - <account>” so they still make sense "
-                     + "sitting among everything else. The Start-menu ones are added either way.",
-                Font = Theme.Small,
-                ForeColor = Theme.TextMuted,
-                AutoSize = false,
-                Location = new Point(24, y + 36),
-                Size = new Size(_content.Width - 52, 34)
-            };
-            _content.Controls.Add(desktopNote);
-            y += 62;
-
-            var taskbar = new CheckBox
-            {
-                Text = "  Also set Windows to never combine taskbar buttons",
-                Font = Theme.Body,
-                ForeColor = Theme.Text,
-                BackColor = Theme.Background,
-                Checked = _taskbarOptIn,
-                AutoSize = false,
-                FlatStyle = FlatStyle.Standard,
-                Location = new Point(2, y + 14),
-                Size = new Size(_content.Width - 30, 26)
-            };
-            taskbar.CheckedChanged += (s, e) => { _taskbarOptIn = taskbar.Checked; Show(Step.Review); };
-            _content.Controls.Add(taskbar);
-
-            var caveat = new Label
-            {
-                Text = "Needed for per-window icons. It affects every app on the system and only takes "
-                     + "effect after you sign out and back in. Off by default, never changed silently.",
-                Font = Theme.Small,
-                ForeColor = Theme.TextMuted,
-                AutoSize = false,
-                Location = new Point(24, y + 42),
-                Size = new Size(_content.Width - 52, 40)
-            };
-            _content.Controls.Add(caveat);
-
             Say(string.Empty);
+        }
+
+        /// <summary>
+        /// One opt-in: a checkbox, and the explanation that belongs to it.
+        ///
+        /// Both of these sit above the list of changes rather than below it, because the list is
+        /// the part of this screen whose length varies by machine — the scheme, the badges and
+        /// these two options each add a line to it — and whatever comes last is what gets pushed
+        /// out of sight. The note under the taskbar box is the only place anyone is told that
+        /// setting is system-wide and applies to every app, so it is precisely the sentence that
+        /// must not depend on how many bullets this particular PC happens to produce. Above the
+        /// list it is on screen at every window size; below it, it was not on screen at the
+        /// default one.
+        ///
+        /// Putting them first also stops them moving. Ticking a box adds or removes a bullet, and
+        /// while the bullets were above, that shifted both boxes by a row — so the control you had
+        /// just clicked jumped out from under the pointer, and the other one slid into its place.
+        /// </summary>
+        private int AddOption(int y, string label, bool ticked, string note, Action<bool> onChange)
+        {
+            var box = new CheckBox
+            {
+                Text = "  " + label,
+                Font = Theme.Body,
+                ForeColor = Theme.Text,
+                BackColor = Theme.Background,
+                Checked = ticked,
+                AutoSize = false,
+                FlatStyle = FlatStyle.Standard,
+                Location = new Point(2, y),
+                Size = new Size(_content.Width - 30, 26)
+            };
+            // Deferred, not immediate: this rebuild disposes the checkbox whose event is still
+            // running. See ShowLater. The taskbar box used to call Show directly.
+            box.CheckedChanged += (s, e) => { onChange(box.Checked); ShowLater(Step.Review); };
+            _content.Controls.Add(box);
+
+            int width = _content.Width - 52;
+            var explain = new Label
+            {
+                Text = note,
+                Font = Theme.Small,
+                ForeColor = Theme.TextMuted,
+                AutoSize = false,
+                Location = new Point(24, y + 28),
+                Size = new Size(width, MeasuredHeight(note, Theme.Small, width))
+            };
+            _content.Controls.Add(explain);
+            return explain.Bottom + 12;
+        }
+
+        /// <summary>
+        /// How tall wrapped text actually needs to be, at this width, in this font.
+        ///
+        /// Every height on this screen used to be a fixed number sized for its worst case. Each
+        /// bullet reserved 34px — two lines — because two of them are file paths that wrap once
+        /// the window is narrow or the user's name is long. The other six are one line of 17px
+        /// and were given the same 34, which wasted more vertical space than the page was over by.
+        /// Measuring gives the long lines their second line and the short ones nothing they do
+        /// not use, at whatever width the panel happens to be.
+        /// </summary>
+        private static int MeasuredHeight(string text, Font font, int width)
+        {
+            // A Label pads its text slightly more than DrawText reports; without the margin,
+            // descenders on the final line are shaved.
+            return TextRenderer.MeasureText(
+                text, font, new Size(width, 4000), TextFormatFlags.WordBreak).Height + 4;
         }
 
         private void Apply()
