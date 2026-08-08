@@ -46,6 +46,9 @@ Grab **one file** from the [**Releases page**](../../releases):
 
 There is nothing to unzip. It is one file.
 
+It collects nothing and sends nothing — there is no network code in it at all. See
+[PRIVACY.md](PRIVACY.md).
+
 ### 2 — Run it
 
 Double-click it. Windows will probably say **"Windows protected your PC"** — this is expected,
@@ -120,7 +123,8 @@ When you sign in, your browser does that with the app's own servers exactly as i
 Twinstance's only job is deciding *which window* the browser hands back to. Sign-in links are
 recorded in a local log with the sensitive part stripped out before it is ever written to disk.
 
-[SECURITY.md](SECURITY.md) explains all of it in detail.
+[PRIVACY.md](PRIVACY.md) lists everything it stores and where; [SECURITY.md](SECURITY.md)
+explains the handling in detail.
 </details>
 
 <details>
@@ -195,6 +199,7 @@ pwsh -File scripts/publish.ps1                                   # single-file r
 | [DETECTION.md](docs/DETECTION.md) | the six-step method for identifying a target app |
 | [BUILDING.md](docs/BUILDING.md) | build, test, and an honest verification status |
 | [SECURITY.md](SECURITY.md) | what it touches, how sign-in links are handled, threat model |
+| [PRIVACY.md](PRIVACY.md) | what is stored, where, and why nothing leaves the machine |
 | [ENGINEERING.md](ENGINEERING.md) | the decisions that look arbitrary but aren't — **read before contributing** |
 
 Two rules matter most:
@@ -206,6 +211,44 @@ Two rules matter most:
 
 Contributions welcome — especially confirmations that a given app works, since the preset list
 marks entries as `measured` or `inferred` and most are still inferred.
+
+## Code signing policy
+
+**Releases are currently unsigned.** Windows will show *"Windows protected your PC"* on every
+download until that changes. Until then, verify what you downloaded against the published
+`SHA256SUMS.txt`, or build it yourself — both are explained in [SECURITY.md](SECURITY.md).
+
+Twinstance has not yet been accepted into any code signing programme. The intended route is the
+[SignPath Foundation](https://signpath.org/), which issues certificates to open source projects
+at no cost; when that is granted, this section will state:
+
+> Free code signing provided by [SignPath.io](https://signpath.io/), certificate by
+> [SignPath Foundation](https://signpath.org/).
+
+Signing will not change how releases are produced. Binaries are built only by the
+[GitHub Actions workflow](.github/workflows/build.yml) from the source in this repository, on a
+tagged commit, and never from a developer's machine.
+
+**Who can do what.** Twinstance is a single-maintainer project today, so one person holds all
+three roles. They are listed separately because they are separate permissions, and because that
+stops being true the moment anyone else contributes.
+
+| Role | Holder |
+|---|---|
+| Author and committer | [@ammarzkhan](https://github.com/ammarzkhan) |
+| Reviewer and approver | [@ammarzkhan](https://github.com/ammarzkhan) |
+| Release and signing approver | [@ammarzkhan](https://github.com/ammarzkhan) |
+
+## Privacy
+
+Twinstance collects nothing and transmits nothing. It contains **no network code at all** — not
+disabled, absent — so there is no telemetry, no analytics, no update check and no account. Your
+account names, badge colours and the app you configured stay in your own user folder.
+
+Sign-in links are the one sensitive thing it handles, and the authorisation code is stripped out
+before anything is written to the log.
+
+Full detail, including exactly what is stored and where: [PRIVACY.md](PRIVACY.md).
 
 ## Licence
 
