@@ -2,6 +2,29 @@
 
 Notable changes to Twinstance. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed — a Store update no longer breaks the setup
+
+Updating a Microsoft Store app broke Twinstance until it was set up again from scratch. Every
+launch reported *"Twinstance cannot find the application it was set up for"*, and nothing the
+user had done caused it.
+
+Windows carries the version inside an MSIX install path, so `Claude_1.25927.0.0_x64__pzs8sxrjxfjjc`
+becomes `Claude_1.26832.0.0_x64__pzs8sxrjxfjjc` the moment the Store updates the app, and the old
+folder is deleted. The saved configuration recorded that absolute path, which made it a value with
+an expiry date: correct when written, invalid at the next update, for every packaged app and every
+user. It was caught when Claude updated underneath a working install on 8 August 2026.
+
+Twinstance now notices the app moved and follows it. The package *family* — `Claude_pzs8sxrjxfjjc`
+— is stable across versions, so the stale path is enough to identify the new one, and the layout
+below the package root carries over unchanged. The configuration is rewritten and the launch
+proceeds. It is a log line, not a dialog: the user had no part in this and has nothing to decide.
+
+Unpackaged applications are deliberately left alone. A missing `slack.exe` under `%LOCALAPPDATA%`
+means it was uninstalled or moved, there is no second candidate to try, and substituting some other
+executable would be far worse than reporting it as missing.
+
 ## [0.4.0] — 2026-08-08
 
 ### Changed — the project is now called Twinstance

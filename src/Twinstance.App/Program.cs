@@ -39,7 +39,7 @@ namespace Twinstance.App
                     // its own when an icon file has been lost or locked.
                     if (string.Equals(first, "--compose", StringComparison.OrdinalIgnoreCase))
                     {
-                        Twinstance.Core.AppConfig cfg = Twinstance.Core.InstanceConfig.Load(AppPaths.ConfigFile);
+                        Twinstance.Core.AppConfig cfg = ConfigStore.Load();
                         int written = Router.ComposeIcons(cfg);
                         Log.Write("--compose wrote " + written.ToString(CultureInfo.InvariantCulture) + " icon(s)");
                         return written > 0 ? 0 : 1;
@@ -77,7 +77,7 @@ namespace Twinstance.App
                     // build output and later installing it properly — silently breaks both.
                     if (string.Equals(first, "--repair", StringComparison.OrdinalIgnoreCase))
                     {
-                        Twinstance.Core.AppConfig cfg = Twinstance.Core.InstanceConfig.Load(AppPaths.ConfigFile);
+                        Twinstance.Core.AppConfig cfg = ConfigStore.Load();
                         if (string.IsNullOrWhiteSpace(cfg.ExePath))
                         {
                             Log.Write("--repair: nothing configured");

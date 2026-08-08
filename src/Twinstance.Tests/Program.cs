@@ -129,6 +129,79 @@ static class Tests
         Check(!PackagePaths.MatchesPattern("exact", "other"), "non-matching literal rejected");
         Check(PackagePaths.MatchesPattern("prefix-middle-suffix", "prefix-*-suffix"), "star in the middle");
         Check(!PackagePaths.MatchesPattern("ab", "abc*"), "shorter than the prefix cannot match");
+
+        RepointTests();
+    }
+
+    /// <summary>
+    /// A Store update replaces the versioned package folder, so a configuration holding the
+    /// absolute path goes stale on its own. This is the real 8 August 2026 case: Claude moved
+    /// from 1.25927.0.0 to 1.26832.0.0 underneath a working install, and every launch then
+    /// reported "cannot find the application it was set up for".
+    /// </summary>
+    static void RepointTests()
+    {
+        Func<HashSet<string>, Func<string, bool>> fs = set => p => set.Contains(p);
+
+        const string stale = @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc\app\Claude.exe";
+        const string fresh = @"C:\Program Files\WindowsApps\Claude_1.26832.0.0_x64__pzs8sxrjxfjjc\app\Claude.exe";
+
+        var roots = new List<string> {
+            @"C:\Program Files\WindowsApps\Claude_1.26832.0.0_x64__pzs8sxrjxfjjc"
+        };
+        var onDisk = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { fresh };
+
+        Eq(PackagePaths.RepointToInstalledPackage(stale, roots, fs(onDisk)), fresh,
+           "a stale package path re-points at the installed version");
+
+        // Newest first is the caller's contract, so the first family match wins. An older
+        // version left on disk must not win over the current one.
+        var both = new List<string> {
+            @"C:\Program Files\WindowsApps\Claude_1.26832.0.0_x64__pzs8sxrjxfjjc",
+            @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc"
+        };
+        Eq(PackagePaths.RepointToInstalledPackage(stale, both, fs(onDisk)), fresh,
+           "the newest matching package is chosen");
+
+        // A different package that happens to be installed is not a candidate - re-pointing at
+        // some other vendor's executable would be far worse than reporting the app as missing.
+        var foreign = new List<string> {
+            @"C:\Program Files\WindowsApps\Slack_1.0.0_x64__abcdefghijklm"
+        };
+        Eq(PackagePaths.RepointToInstalledPackage(stale, foreign,
+             fs(new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+                 @"C:\Program Files\WindowsApps\Slack_1.0.0_x64__abcdefghijklm\app\Claude.exe" })),
+           null, "a different package family is never substituted");
+
+        // The root exists but the executable inside it does not.
+        Eq(PackagePaths.RepointToInstalledPackage(stale, roots,
+             fs(new HashSet<string>(StringComparer.OrdinalIgnoreCase))),
+           null, "a package root without the executable is rejected");
+
+        // Unpackaged apps have no second candidate: a missing slack.exe means uninstalled.
+        Eq(PackagePaths.RepointToInstalledPackage(
+             @"C:\Users\a\AppData\Local\Programs\slack\slack.exe", roots, fs(onDisk)),
+           null, "an unpackaged path is never re-pointed");
+
+        Eq(PackagePaths.RepointToInstalledPackage(null, roots, fs(onDisk)), null,
+           "a null path is safe");
+        Eq(PackagePaths.RepointToInstalledPackage(stale, null, fs(onDisk)), null,
+           "null roots are safe");
+        Eq(PackagePaths.RepointToInstalledPackage(stale, roots, null), null,
+           "a null existence check is safe");
+
+        // The package root itself carries no executable tail to transplant.
+        Eq(PackagePaths.RepointToInstalledPackage(
+             @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc", roots, fs(onDisk)),
+           null, "a bare package root has nothing to re-point");
+
+        // A deeper layout must carry over whole, not just the file name.
+        const string nested = @"C:\Program Files\WindowsApps\Claude_1.25927.0.0_x64__pzs8sxrjxfjjc\app\bin\Claude.exe";
+        Eq(PackagePaths.RepointToInstalledPackage(nested, roots,
+             fs(new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+                 @"C:\Program Files\WindowsApps\Claude_1.26832.0.0_x64__pzs8sxrjxfjjc\app\bin\Claude.exe" })),
+           @"C:\Program Files\WindowsApps\Claude_1.26832.0.0_x64__pzs8sxrjxfjjc\app\bin\Claude.exe",
+           "the whole path below the package root carries over");
     }
 
     // -------------------------------------------------------------- chromium --

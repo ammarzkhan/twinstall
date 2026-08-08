@@ -212,7 +212,7 @@ namespace Twinstance.App
             foreach (Preset p in _presets)
                 if (Presets.FindInstalled(p) != null) _installed.Add(p);
 
-            AppConfig saved = InstanceConfig.Load(AppPaths.ConfigFile);
+            AppConfig saved = ConfigStore.Load();
             if (!string.IsNullOrWhiteSpace(saved.ExePath))
             {
                 _config.ExePath = saved.ExePath;

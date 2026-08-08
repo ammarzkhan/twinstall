@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Twinstance.Core
 {
@@ -100,6 +101,67 @@ namespace Twinstance.Core
             int end = p.IndexOf(PathUtil.Sep, start);
             if (end <= start) return null;
             return PathUtil.Normalise(p.Substring(0, end));
+        }
+
+        /// <summary>
+        /// Re-points a packaged executable path at the version currently installed, or null if
+        /// no such package is present.
+        ///
+        /// Why this exists: **an MSIX install path carries the version in it**, so
+        /// <c>Claude_1.25927.0.0_x64__pzs8sxrjxfjjc</c> becomes
+        /// <c>Claude_1.26832.0.0_x64__pzs8sxrjxfjjc</c> the moment the Store updates the app,
+        /// and the old folder is gone. A configuration that stored the absolute path is
+        /// therefore born with an expiry date: every Store update stranded the user with
+        /// "cannot find the application it was set up for" and a full re-setup, having done
+        /// nothing wrong. Observed on 8 August 2026 when Claude updated underneath a working
+        /// install.
+        ///
+        /// The package *family* (<c>Claude_pzs8sxrjxfjjc</c>) is stable across versions, which
+        /// is what makes the old path enough to find the new one: same family, same layout
+        /// below the package root, so the tail of the path carries over verbatim.
+        ///
+        /// Unpackaged executables return null. A missing <c>slack.exe</c> under %LOCALAPPDATA%
+        /// means the app was uninstalled or moved — there is no second candidate to try, and
+        /// guessing at one would be worse than reporting it.
+        /// </summary>
+        /// <param name="packageRoots">
+        /// Existing package roots, newest first — see <c>PackageIndex.InstalledPackageRoots</c>.
+        /// </param>
+        /// <param name="fileExists">
+        /// Confirms a candidate. Required: the caller owns the filesystem, and a root existing
+        /// says nothing about the executable inside it still being there.
+        /// </param>
+        public static string RepointToInstalledPackage(
+            string exePath, IEnumerable<string> packageRoots, Func<string, bool> fileExists)
+        {
+            if (packageRoots == null || fileExists == null) return null;
+
+            string family = FamilyFromFullName(PackageFullNameFromExePath(exePath));
+            if (family == null) return null;
+
+            string oldRoot = PackageRoot(exePath);
+            if (string.IsNullOrEmpty(oldRoot)) return null;
+
+            string normalised = PathUtil.Normalise(exePath);
+            if (!normalised.StartsWith(oldRoot, StringComparison.OrdinalIgnoreCase)) return null;
+
+            // "app\Claude.exe" — everything below the package root, which the new version lays
+            // out identically.
+            string relative = normalised.Substring(oldRoot.Length).Trim(PathUtil.Sep);
+            if (relative.Length == 0) return null;
+
+            foreach (string root in packageRoots)
+            {
+                if (string.IsNullOrWhiteSpace(root)) continue;
+
+                string candidate = PathUtil.Join(root, relative);
+                string candidateFamily = FamilyFromFullName(PackageFullNameFromExePath(candidate));
+                if (!string.Equals(candidateFamily, family, StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (fileExists(candidate)) return candidate;
+            }
+
+            return null;
         }
 
         /// <summary>

@@ -44,7 +44,7 @@ namespace Twinstance.App
                 return 0;
             }
 
-            AppConfig cfg = InstanceConfig.Load(AppPaths.ConfigFile);
+            AppConfig cfg = ConfigStore.Load();
 
             if (string.IsNullOrWhiteSpace(cfg.ExePath) || !File.Exists(cfg.ExePath))
             {
@@ -99,7 +99,7 @@ namespace Twinstance.App
         // ------------------------------------------------------------ launching --
         internal static int Launch(string instanceName)
         {
-            AppConfig cfg = InstanceConfig.Load(AppPaths.ConfigFile);
+            AppConfig cfg = ConfigStore.Load();
             Instance chosen = Find(cfg, instanceName);
 
             if (chosen == null)
@@ -138,13 +138,13 @@ namespace Twinstance.App
                     }
 
                     Log.Write("icon watcher started");
-                    ApplyIcons(InstanceConfig.Load(AppPaths.ConfigFile), 0);
+                    ApplyIcons(ConfigStore.Load(), 0);
                     return 0;
                 }
             }
 
             Log.Write("icon refresh for " + seconds.ToString(CultureInfo.InvariantCulture) + "s");
-            ApplyIcons(InstanceConfig.Load(AppPaths.ConfigFile), seconds);
+            ApplyIcons(ConfigStore.Load(), seconds);
             return 0;
         }
 
