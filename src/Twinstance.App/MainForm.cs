@@ -30,6 +30,7 @@ namespace Twinstance.App
         private readonly Label _status = new Label();
         private readonly FlatButton _back = new FlatButton("Back", ButtonKind.Subtle);
         private readonly FlatButton _next = new FlatButton("Continue", ButtonKind.Primary);
+        private readonly FlatButton _remove = new FlatButton("Remove Twinstance's changes", ButtonKind.Danger);
 
         private readonly AppConfig _config = new AppConfig();
         private DetectionResult _detection;
@@ -190,19 +191,47 @@ namespace Twinstance.App
             _next.Click += (s, e) => GoNext();
             Controls.Add(_next);
 
+            // Footer chrome, not page content — see Relayout.
+            _remove.Size = new Size(230, 40);
+            _remove.Location = new Point(34, 562);
+            _remove.Visible = false;
+            _remove.Click += (s, e) => RemoveEverything();
+            Controls.Add(_remove);
+
             Resize += (s, e) => Relayout();
         }
 
+        /// <summary>
+        /// The footer row: undo on the left, status text in the middle, Back and Continue on the
+        /// right. Everything is measured from the window edges so it holds at any size.
+        ///
+        /// The undo button belongs here rather than at the bottom of step 1, which is where it
+        /// used to be. Step 1 lists every known app this PC has installed, so its height is
+        /// decided by the machine — five apps and a saved config came to 502px in a 448px panel,
+        /// which put the button below the fold behind a scrollbar. That is survivable for a list
+        /// of apps, where scrolling for more of a list is what a list looks like, but not for
+        /// this: it is the only way to undo a setup from the window, and the page it was on is
+        /// the one screen nobody thinks to scroll. In the footer it sits beside Continue at a
+        /// fixed distance from the bottom edge, whether the PC has one known app or twenty.
+        /// </summary>
         private void Relayout()
         {
             _title.Size = new Size(ClientSize.Width - 64, 34);
             _crumb.Size = new Size(ClientSize.Width - 64, 20);
             _content.Size = new Size(ClientSize.Width - 64, ClientSize.Height - 192);
+
             int row = ClientSize.Height - 78;
-            _status.Location = new Point(34, row + 4);
-            _status.Size = new Size(ClientSize.Width - 330, 36);
             _next.Location = new Point(ClientSize.Width - 182, row);
             _back.Location = new Point(ClientSize.Width - 288, row);
+            _remove.Location = new Point(34, row);
+
+            // The status line takes what is left between the two groups. Its message on step 1
+            // names the configured app, so it is at its longest on exactly the screen where the
+            // undo button is also present — hence taken from the buttons rather than fixed.
+            int left = _remove.Visible ? _remove.Right + 16 : 34;
+            int right = (_back.Visible ? _back.Left : _next.Left) - 8;
+            _status.Location = new Point(left, row + 4);
+            _status.Size = new Size(Math.Max(0, right - left), 36);
         }
 
         private void LoadPresets()
@@ -246,6 +275,10 @@ namespace Twinstance.App
                 _content.Controls.Remove(c);
                 c.Dispose();
             }
+
+            // Undoing a setup is offered from step 1 only; the later steps are mid-setup, and
+            // the way out of those is the Back button. Cleared here so no step has to remember.
+            _remove.Visible = false;
 
             switch (step)
             {
@@ -333,22 +366,16 @@ namespace Twinstance.App
             };
             browse.Click += (s, e) => Browse();
             _content.Controls.Add(browse);
-            y += 58;
 
             if (_config.Instances.Count > 0)
             {
-                var remove = new FlatButton("Remove Twinstance's changes", ButtonKind.Danger)
-                {
-                    Location = new Point(0, y + 12),
-                    Size = new Size(230, 38)
-                };
-                remove.Click += (s, e) => RemoveEverything();
-                _content.Controls.Add(remove);
-                // The status line is one line high, and a Store app's path runs to about
-                // ninety characters — it was being clipped mid-word ("...\app\Claude.ex"),
-                // which reads as a rendering fault rather than as a long path. The
-                // executable's own name is the part a user recognises, and the full path is
-                // already shown on the row above.
+                // Lives in the footer, beside Continue — see Relayout for why it is not here.
+                _remove.Visible = true;
+                // The status line is small, and smaller still now the undo button shares the
+                // footer with it, while a Store app's path runs to about ninety characters —
+                // it was being clipped mid-word ("...\app\Claude.ex"), which reads as a
+                // rendering fault rather than as a long path. The executable's own name is the
+                // part a user recognises, and the full path is already shown on the row above.
                 Say("Twinstance is already set up for "
                     + (string.IsNullOrWhiteSpace(_config.ExePath)
                         ? "an app"
