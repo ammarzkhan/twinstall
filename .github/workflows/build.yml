@@ -192,17 +192,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # This is the download page, so it carries the things a download page has to say:
+          # The body lives in .github/RELEASE_NOTES.md rather than inline. A multi-line string
+          # inside a YAML block scalar has to stay indented past the block, and markdown does
+          # not survive that: an unindented continuation line silently ends the block and the
+          # whole workflow stops parsing, which is exactly what happened when it was written
+          # inline. A file is also reviewable as markdown and editable without touching CI.
+          #
+          # This is the download page, so the body carries what a download page has to say:
           # what the software does, that the binaries are unsigned, how to verify them, and
-          # what happens to your data. The last one is a condition of the SignPath Foundation
-          # programme and is worth stating plainly regardless.
+          # what happens to your data — the last being a SignPath Foundation condition, and
+          # worth stating plainly regardless.
           gh release create "${GITHUB_REF_NAME}" \
             --title "Twinstance ${GITHUB_REF_NAME}" \
-            --notes "Run two accounts of the same desktop app side by side on Windows, and have the sign-in land on the one you meant.
-
-**These binaries are UNSIGNED.** Windows will show \"Windows protected your PC\". Read [SECURITY.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/SECURITY.md) before running them, and verify your download against \`SHA256SUMS.txt\`.
-
-**Privacy:** Twinstance collects nothing and transmits nothing — it contains no network code at all, so no data is transferred anywhere, with or without your consent. See [PRIVACY.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/PRIVACY.md).
-
-Changes in this release: [CHANGELOG.md](https://github.com/${GITHUB_REPOSITORY}/blob/main/CHANGELOG.md)" \
+            --notes-file .github/RELEASE_NOTES.md \
             artifacts/*.exe artifacts/SHA256SUMS.txt
