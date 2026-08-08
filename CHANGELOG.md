@@ -4,6 +4,20 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 ## [Unreleased]
 
+### Fixed — narrowing the window pushed every row out of its panel
+
+Dragging the window down towards its 660×600 minimum left every row wider than the panel holding
+it. AutoScroll answered with a horizontal scrollbar, and the rows ran underneath the vertical one.
+Widening again left a ragged right margin instead.
+
+A step's controls are positioned absolutely and sized from the panel's width once, while the page
+is being built, and `Relayout` cannot simply rebuild them: a rebuild disposes controls that may
+still be inside their own `Click` handler, which is the whole reason `ShowLater` exists. So the
+children that should track the panel are anchored as they are added, and WinForms does the work.
+
+Verified against the running window at 660×600 rather than reasoned about: rows fill the panel,
+no horizontal scrollbar appears, and long paths wrap instead of overflowing.
+
 ### Fixed — the review screen hid the one warning it exists to give
 
 The taskbar option on step 4 changes a Windows setting that applies to **every application on
@@ -22,7 +36,9 @@ matters.
   lines — because two of them are file paths that wrap when the window is narrow or the user's
   name is long. The other six hold one 17px line and were given the same 34, wasting more space
   than the page was over by. Heights now come from the text, so the long lines still wrap and the
-  short ones cost what they use. At the default window size the screen fits with no scrollbar.
+  short ones cost what they use. The page still scrolls at the default window size when both
+  options are ticked — that was measured, not assumed — but everything that explains a choice is
+  above the fold, and only the list of changes falls below it.
 - **Ticking an option no longer moves it.** Each tick adds or removes a bullet; with the bullets
   above, both checkboxes jumped a row on every click — the one just clicked slid out from under
   the pointer, and the other took its place.

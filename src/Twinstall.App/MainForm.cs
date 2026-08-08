@@ -232,6 +232,46 @@ namespace Twinstall.App
             int right = (_back.Visible ? _back.Left : _next.Left) - 8;
             _status.Location = new Point(left, row + 4);
             _status.Size = new Size(Math.Max(0, right - left), 36);
+
+            // Nothing inside the panel is touched here. The children that follow its width are
+            // anchored as they are added — see AddFullWidth.
+        }
+
+        /// <summary>
+        /// Adds a child of the content panel whose width has to keep pace with the panel's.
+        ///
+        /// A step's controls are positioned absolutely and sized from <c>_content.Width</c> once,
+        /// while the page is being built. <see cref="Relayout"/> resizes the panel on every Resize
+        /// event, but re-running the builder from there is not an option: a rebuild disposes
+        /// controls that may still be inside their own Click handler, which is the whole reason
+        /// <see cref="ShowLater"/> exists. An anchor moves the job to WinForms instead.
+        ///
+        /// Without it, dragging the window down to its 660x600 minimum left every row wider than
+        /// the panel it sits in — AutoScroll then put up a horizontal scrollbar and the rows ran
+        /// under the vertical one. Widening left a ragged right margin instead.
+        ///
+        /// Three things measured on .NET 8 against the running window rather than assumed, because
+        /// each of them decides whether this works at all:
+        /// - **Nothing moves at the default size**, and that rests on <c>Show(Step)</c> batching
+        ///   the build between SuspendLayout and ResumeLayout. The anchor records a child's gap
+        ///   from the panel's *client* edge at its first layout; batching means that one pass adds
+        ///   every child and settles the vertical scrollbar together, so the gap recorded is the
+        ///   real one. Rows measured 632px wide before this change and 632px after — only resizing
+        ///   behaves differently. Add the children unbatched and the scrollbar arrives mid-build
+        ///   instead, after the gap is already banked, and every row loses its width to it.
+        ///   Don't "tidy" the hand-picked -24/-26/-28/-30 widths at the call sites into one number
+        ///   either: they are what the recorded gap is made of.
+        /// - **A control that was invisible while the panel resized still comes back at the right
+        ///   width when it is shown.** BuildResult's technical-details box is added hidden and
+        ///   toggled by a button, and it was the one case with a real chance of not working.
+        /// - The panel still scrolls itself slightly on resize, keeping the focused control in
+        ///   view. That is WinForms and it predates this: step 4 went from -26px to -9px, and
+        ///   stopped scrolling sideways at all.
+        /// </summary>
+        private void AddFullWidth(Control c)
+        {
+            c.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            _content.Controls.Add(c);
         }
 
         private void LoadPresets()
@@ -354,7 +394,7 @@ namespace Twinstall.App
                         Tag2 = path
                     };
                     row.Click += (s, e) => ChooseApp((string)((ChoiceRow)s).Tag2);
-                    _content.Controls.Add(row);
+                    AddFullWidth(row);
                     y += 68;
                 }
             }
@@ -399,7 +439,7 @@ namespace Twinstall.App
                 Location = new Point(2, y),
                 Size = new Size(_content.Width - 28, 44)
             };
-            _content.Controls.Add(note);
+            AddFullWidth(note);
             return y + 54;
         }
 
@@ -484,7 +524,7 @@ namespace Twinstall.App
                 Location = new Point(2, y),
                 Size = new Size(_content.Width - 28, 48)
             };
-            _content.Controls.Add(summary);
+            AddFullWidth(summary);
             y += 58;
 
             if (r != null)
@@ -529,7 +569,7 @@ namespace Twinstall.App
             };
             details.Click += (s, e) => { dump.Visible = !dump.Visible; };
             _content.Controls.Add(details);
-            _content.Controls.Add(dump);
+            AddFullWidth(dump);
 
             Say(ok ? "Nothing has been changed yet." : "Nothing was changed.");
         }
@@ -537,7 +577,7 @@ namespace Twinstall.App
         private int AddFact(int y, bool good, string text)
         {
             var f = new FactRow(text, good) { Location = new Point(2, y), Width = _content.Width - 28 };
-            _content.Controls.Add(f);
+            AddFullWidth(f);
             return y + 30;
         }
 
@@ -566,7 +606,7 @@ namespace Twinstall.App
                     Tag2 = captured
                 };
                 row.Click += (s, e) => BeginInvoke(new Action(() => EditInstance(captured)));
-                _content.Controls.Add(row);
+                AddFullWidth(row);
                 y += 68;
             }
 
@@ -696,7 +736,7 @@ namespace Twinstall.App
                     Location = new Point(4, y),
                     Size = new Size(width, MeasuredHeight(text, Theme.Body, width))
                 };
-                _content.Controls.Add(l);
+                AddFullWidth(l);
                 y = l.Bottom + 8;
             }
 
@@ -736,7 +776,7 @@ namespace Twinstall.App
             // Deferred, not immediate: this rebuild disposes the checkbox whose event is still
             // running. See ShowLater. The taskbar box used to call Show directly.
             box.CheckedChanged += (s, e) => { onChange(box.Checked); ShowLater(Step.Review); };
-            _content.Controls.Add(box);
+            AddFullWidth(box);
 
             int width = _content.Width - 52;
             var explain = new Label
@@ -748,7 +788,7 @@ namespace Twinstall.App
                 Location = new Point(24, y + 28),
                 Size = new Size(width, MeasuredHeight(note, Theme.Small, width))
             };
-            _content.Controls.Add(explain);
+            AddFullWidth(explain);
             return explain.Bottom + 12;
         }
 
@@ -875,7 +915,7 @@ namespace Twinstall.App
                 Location = new Point(2, y),
                 Size = new Size(_content.Width - 30, 22)
             };
-            _content.Controls.Add(steps);
+            AddFullWidth(steps);
             y += 28;
 
             var hint = new SettingsHint
@@ -884,7 +924,7 @@ namespace Twinstall.App
                 Location = new Point(0, y),
                 Width = Math.Max(200, _content.Width - 26)
             };
-            _content.Controls.Add(hint);
+            AddFullWidth(hint);
             y += hint.Height + 4;
 
             var recheck = new FlatButton("Check again", ButtonKind.Subtle)
