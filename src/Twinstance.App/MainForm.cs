@@ -344,7 +344,16 @@ namespace Twinstance.App
                 };
                 remove.Click += (s, e) => RemoveEverything();
                 _content.Controls.Add(remove);
-                Say("Twinstance is already set up for " + (_config.ExePath ?? "an app") + ".");
+                // The status line is one line high, and a Store app's path runs to about
+                // ninety characters — it was being clipped mid-word ("...\app\Claude.ex"),
+                // which reads as a rendering fault rather than as a long path. The
+                // executable's own name is the part a user recognises, and the full path is
+                // already shown on the row above.
+                Say("Twinstance is already set up for "
+                    + (string.IsNullOrWhiteSpace(_config.ExePath)
+                        ? "an app"
+                        : Path.GetFileNameWithoutExtension(_config.ExePath))
+                    + ".");
             }
             else
             {
