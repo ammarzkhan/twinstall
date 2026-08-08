@@ -1,6 +1,6 @@
-# Twinstance — design and Store roadmap
+# Twinstall — design and Store roadmap
 
-> *twinstance* (verb) — to run a second, separately signed-in copy of a desktop app.
+> *twinstall* (verb) — to run a second, separately signed-in copy of a desktop app.
 
 Generalises the Claude-specific tool into a profile launcher for any Chromium/Electron
 desktop app, packaged as MSIX for the Microsoft Store.
@@ -26,14 +26,14 @@ of the first profile.
 **2. You can't tell the windows apart.** Same executable, same AppUserModelID, so Windows draws
 identical taskbar buttons and merges them into one.
 
-Twinstance solves both: a router that owns the scheme and dispatches to the instance you were
+Twinstall solves both: a router that owns the scheme and dispatches to the instance you were
 last using, and Chrome-style profile badges on the taskbar icons.
 
 ---
 
 ## What changes from the Claude-specific version
 
-| Area | Now | Twinstance |
+| Area | Now | Twinstall |
 |---|---|---|
 | Target app | Hardcoded Claude | Any Chromium/Electron exe the user points at |
 | Discovery | `Get-AppxPackage -Name Claude` | Automatic: Chromium markers, package layout, `Local State` scan |
@@ -117,10 +117,10 @@ automatically because it is WebView2, without anyone having to know that in adva
 Three projects, split along one line: **can this code be decided, or must it be observed?**
 
 ```
-Twinstance.sln
+Twinstall.sln
 Directory.Build.props          shared build settings
 src/
-  Twinstance.Core/       net8.0           pure decision logic, no OS calls
+  Twinstall.Core/       net8.0           pure decision logic, no OS calls
     PathUtil.cs                          Windows path rules, implemented not inherited
     PackagePaths.cs                      MSIX family name, virtualised profile root
     CommandLine.cs                       --user-data-dir parsing, child-process detection
@@ -128,16 +128,16 @@ src/
     IsolationCheck.cs                    would these two profiles collide?
     InstanceConfig.cs                    the instances.tsv format
     RouteDecision.cs                     which instance gets the callback
-  Twinstance.Platform/   net8.0-windows   thin shells over OS APIs, no decisions
+  Twinstall.Platform/   net8.0-windows   thin shells over OS APIs, no decisions
     NativeMethods.cs                     user32 P/Invoke
     WindowEnumerator.cs                  Z-order walk
     ProcessMap.cs                        WMI: running processes -> instances
     IconBadger.cs                        GDI+: compose badge, write .ico, WM_SETICON
-  Twinstance.Tests/      net8.0           console runner, references Core only
-  Twinstance.Package/                     MSIX manifest and assets
+  Twinstall.Tests/      net8.0           console runner, references Core only
+  Twinstall.Package/                     MSIX manifest and assets
 ```
 
-**Why the target frameworks differ, and why that matters.** `Twinstance.Core` targets `net8.0`,
+**Why the target frameworks differ, and why that matters.** `Twinstall.Core` targets `net8.0`,
 not `net8.0-windows`. That is the boundary made mechanical: a Win32, WMI or GDI+ call added to
 the core fails to compile rather than quietly making the decision logic untestable off Windows.
 CI enforces it from the other side too — a `core-portability` job builds and runs the whole test
@@ -150,7 +150,7 @@ to implement Windows path rules explicitly in `PathUtil` — which is *better* o
 because `Path.GetFullPath` silently turns a malformed config value into a real path somewhere
 unexpected, directly underneath an isolation check.
 
-**Testing without a framework.** `Twinstance.Tests` is a console app whose exit code is the
+**Testing without a framework.** `Twinstall.Tests` is a console app whose exit code is the
 result. It runs under `dotnet run` in CI with no restore, and under mono anywhere. 155 assertions
 across path handling, package-name derivation, command-line parsing, Chromium detection, stub
 resolution, isolation, config round-tripping, route selection, profile discovery, scheme matching

@@ -1,14 +1,44 @@
 # Changelog
 
-Notable changes to Twinstance. Format follows [Keep a Changelog](https://keepachangelog.com/).
+Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.5.0] — 2026-08-08
+
+### Changed — the project is called Twinstall again
+
+**0.4.0 renamed Twinstall to Twinstance for a reason that turned out to be false.** It stated
+that `twinstall.com` belonged to an unrelated company. It does not. That domain hosts nothing at
+all, and sits unsold on a broker's shelf alongside `twinstance.com`. The firm trading as
+Twinstall is Dutch, sells window-frame wrapping in Utrecht, and is at `twinstall.nl` — it never
+held the `.com`, and it does not sell software.
+
+The searchability concern behind the rename was real, but it was never the deciding factor it
+was treated as. Searching a name is how somebody who has *already heard of a tool* confirms they
+have found the right one. It is not how anyone discovers a two-day-old project in the first
+place, under any name, so a name cannot be chosen on it alone.
+
+Neither name is uncontested. `Twinstall` collides with the Dutch firm and with TWRP's
+`twinstall.cpp`; `Twinstance` collides with an Indian web-design LLP. Between two imperfect
+options the better name for the product wins, and this one describes what the program actually
+does — it installs a twin.
+
+Nothing about how it works has changed. The identifiers move back with the name:
+
+- The executable is `Twinstall.exe`, installed to `%LOCALAPPDATA%\Programs\Twinstall`.
+- Settings live in `%LOCALAPPDATA%\Twinstall`.
+- The protocol handler registers as `Twinstall.Url.<scheme>`, under a `Twinstall` entry in
+  `RegisteredApplications`.
+
+As in 0.4.0, builds under the two names cannot uninstall each other — each removes only the
+entries bearing its own name. **This time that affects nobody.** Every 0.4.1 release asset shows
+zero downloads, 0.4.0 shows two, both from the author's own machine, and the repository has no
+clones, views, stars or forks. There is no migration to perform and no warning worth printing.
 
 ### Fixed — installing from a build tree produced a copy that could not launch an account
 
 **Released builds were never affected**, which is why this survived unnoticed: `publish.ps1` sets
 `PublishSingleFile`, and the bundle carries everything. It only ever bit an install made from a
-framework-dependent build output — which is what anyone working on Twinstance has.
+framework-dependent build output — which is what anyone working on Twinstall has.
 
 `CopyProgram` copied the flat files plus `presets`, and skipped every other folder. But the
 `System.Management.dll` sitting beside the executable in a build tree is the 73 KB *reference*
@@ -43,6 +73,7 @@ proceeds. It is a log line, not a dialog: the user had no part in this and has n
 Unpackaged applications are deliberately left alone. A missing `slack.exe` under `%LOCALAPPDATA%`
 means it was uninstalled or moved, there is no second candidate to try, and substituting some other
 executable would be far worse than reporting it as missing.
+
 ### Fixed — the only way to undo a setup was hidden on PCs with several apps installed
 
 "Remove Twinstance's changes" sat at the bottom of step 1, under the list of applications found
@@ -71,6 +102,11 @@ Two things follow from it no longer being page content:
 ## [0.4.0] — 2026-08-08
 
 ### Changed — the project is now called Twinstance
+
+> **Correction, 8 August 2026.** The claim below that `twinstall.com` belongs to an unrelated
+> company is false — the domain hosts nothing and is unsold. The rename was reversed in
+> [0.5.0](#050--2026-08-08). The entry is left as published rather than quietly edited, because a
+> changelog that revises its own history is worth less than one that admits a mistake.
 
 The previous name was Twinstall. `twinstall.com` belongs to an unrelated company, and the rest of
 the first page of results was already spoken for by a Tripwire install script and a TWRP header

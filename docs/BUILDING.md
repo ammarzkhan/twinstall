@@ -8,8 +8,8 @@
 ## Build and test
 
 ```bash
-dotnet build Twinstance.sln -c Release
-dotnet run --project src/Twinstance.Tests -c Release --no-build
+dotnet build Twinstall.sln -c Release
+dotnet run --project src/Twinstall.Tests -c Release --no-build
 ```
 
 The test runner prints `passed: N   failed: N` and exits non-zero on failure. That exit code is
@@ -17,13 +17,13 @@ the whole contract — there is no test adapter, no XML report and nothing to in
 
 ## Building off Windows
 
-`Twinstance.Core` and `Twinstance.Tests` target `net8.0` and build and run anywhere:
+`Twinstall.Core` and `Twinstall.Tests` target `net8.0` and build and run anywhere:
 
 ```bash
-dotnet run --project src/Twinstance.Tests -c Release
+dotnet run --project src/Twinstall.Tests -c Release
 ```
 
-`Twinstance.Platform` targets `net8.0-windows`. It still *compiles* on Linux or macOS because the
+`Twinstall.Platform` targets `net8.0-windows`. It still *compiles* on Linux or macOS because the
 project sets `EnableWindowsTargeting`; it only runs on Windows.
 
 If you have no .NET SDK but do have mono, the core and its tests compile there too — useful for
@@ -31,8 +31,8 @@ a quick check on a machine you don't want to install a SDK on:
 
 ```bash
 cd src
-mcs -target:library -out:/tmp/Twinstance.Core.dll Twinstance.Core/*.cs
-mcs -out:/tmp/tests.exe -r:/tmp/Twinstance.Core.dll Twinstance.Tests/*.cs
+mcs -target:library -out:/tmp/Twinstall.Core.dll Twinstall.Core/*.cs
+mcs -out:/tmp/tests.exe -r:/tmp/Twinstall.Core.dll Twinstall.Tests/*.cs
 mono /tmp/tests.exe
 ```
 
@@ -46,15 +46,15 @@ Runs the tests first and refuses to publish if they fail, then writes two single
 
 | Artifact | Size | Needs |
 |---|---|---|
-| `Twinstance-<v>.exe` | ~0.6 MB | .NET 8 **Desktop** Runtime on the target machine |
-| `Twinstance-<v>-standalone.exe` | ~147 MB | nothing |
+| `Twinstall-<v>.exe` | ~0.6 MB | .NET 8 **Desktop** Runtime on the target machine |
+| `Twinstall-<v>-standalone.exe` | ~147 MB | nothing |
 
 Prefer the small one where you can. It is not just smaller — a handful of ordinary managed DLLs
 beside a normal apphost is the least unusual thing you can hand an antivirus engine.
 
 ### Never enable single-file compression
 
-`EnableCompressionInSingleFile` is pinned **off** in `Twinstance.App.csproj`, and this is not a
+`EnableCompressionInSingleFile` is pinned **off** in `Twinstall.App.csproj`, and this is not a
 size preference. Measured on 7 August 2026, on a machine running Bitdefender, Defender and
 Malwarebytes:
 
@@ -66,7 +66,7 @@ Malwarebytes:
 | **Single-file, compressed** | 65 MB | ❌ **quarantined mid-build, 4/4 attempts** |
 
 A compressed payload embedded in an executable and expanded at run time is the structure of a
-packer, which is what malware uses to defeat static analysis. Twinstance is already an unsigned
+packer, which is what malware uses to defeat static analysis. Twinstall is already an unsigned
 protocol handler that reads other processes' command lines; it does not need to look packed too.
 
 **If a publish fails with `GenerateBundle` and `UnauthorizedAccessException`, check your AV logs
@@ -122,10 +122,10 @@ between them is where the last round of bugs lived.
 
 | Component | Compiled | Analysed | Unit-tested | Run on Windows |
 |---|---|---|---|---|
-| `Twinstance.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **155 assertions, all passing** | **yes — suite executed** |
-| `Twinstance.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 155  failed: 0`** |
-| `Twinstance.Platform` (8 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **yes — every adapter has run** |
-| `Twinstance.App` (10 files) | real Windows | **yes, clean** | driven through Core | **yes — routes, launches, badges, UI opens** |
+| `Twinstall.Core` (11 files) | .NET SDK 8.0.423, real Windows | **yes, clean** | **155 assertions, all passing** | **yes — suite executed** |
+| `Twinstall.Tests` | .NET SDK 8.0.423, real Windows | **yes, clean** | is the tests | **yes — `passed: 155  failed: 0`** |
+| `Twinstall.Platform` (8 files) | **real BCL, real packages restored** | **yes, clean, warnings now fatal** | nothing to unit-test; they are OS calls | **yes — every adapter has run** |
+| `Twinstall.App` (10 files) | real Windows | **yes, clean** | driven through Core | **yes — routes, launches, badges, UI opens** |
 | MSIX packaging | not built | n/a | n/a | **not yet** |
 
 All of this changed on 7 August 2026, when the code was first run on a real Windows machine
@@ -144,7 +144,7 @@ three rules** in the core and tests, all fixed at source rather than suppressed:
 | CA2249 — use `Contains` not `IndexOf` | 1 | `CommandLine.IsChildProcess` | `Contains(..., StringComparison.OrdinalIgnoreCase)` |
 | CA1861 — constant array argument | 1 | test round-trip split | hoisted to a `static readonly` field |
 
-`Twinstance.Platform` was then analysed the only way possible without NuGet: compiled against
+`Twinstall.Platform` was then analysed the only way possible without NuGet: compiled against
 hand-written stub `System.Drawing` and `System.Management` types. That found **three real
 defects**, also fixed:
 
@@ -178,7 +178,7 @@ than throw, `CA1303` on the test runner's own console output. Two of those `CA10
 caller-supplied delegate, where narrowing the catch would mean guessing what someone else's
 lambda throws. CI fails if the count rises above ten.
 
-`Twinstance.App` also suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` in that project alone,
+`Twinstall.App` also suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` in that project alone,
 with reasons in its `.csproj`. Those are WinForms ownership false positives — a `Form` disposes
 its `Controls`, and `Application.Run` disposes the `Form`. The trade-off to remember: a
 disposable field that is **not** added to `Controls` won't be flagged there either.
@@ -192,7 +192,7 @@ clean build that is not clean. Use `-p:AnalysisLevel=latest-all`.
 ported from code that demonstrably worked in the Claude-specific tool, but this exact code has
 not run once. Compiling against the real BCL is a stronger claim than it was; it is not the same
 claim. The logic they *contain* is minimal by design — every decision was pushed into
-`Twinstance.Core`, where it is tested. A wrong P/Invoke signature or a GDI+ call in the wrong
+`Twinstall.Core`, where it is tested. A wrong P/Invoke signature or a GDI+ call in the wrong
 order would still get through everything above. **All three are needed by the router**, so 3b is
 where they get their first real exercise.
 

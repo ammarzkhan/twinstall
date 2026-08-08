@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Draws Twinstance's mark and writes the PNG and ICO assets.
+    Draws Twinstall's mark and writes the PNG and ICO assets.
 
 .DESCRIPTION
     The mark is the same tile twice, told apart by colour — one application, two identities.
     Geometry matches assets/logo.svg; keep the two in step.
 
     Generated rather than hand-drawn so the shape is reviewable as code, and so the MSIX asset
-    sizes can be regenerated without a design tool. This is Twinstance's OWN artwork: it is the
+    sizes can be regenerated without a design tool. This is Twinstall's OWN artwork: it is the
     one exception to the rule about not committing icons, which exists to keep other vendors'
     logos out of the repository.
 
@@ -91,7 +91,7 @@ Write-Host "wrote $($sizes.Count) PNGs"
 
 # -------------------------------------------------------------------- ICO --
 # Vista+ icons may hold PNG payloads, which keeps the 256px entry small.
-$icoPath = Join-Path $OutputDirectory 'twinstance.ico'
+$icoPath = Join-Path $OutputDirectory 'twinstall.ico'
 $icoSizes = 16, 32, 48, 64, 128, 256
 $streams = @()
 foreach ($s in $icoSizes) {
@@ -117,10 +117,10 @@ foreach ($e in $streams) {
 }
 foreach ($e in $streams) { $w.Write($e.Bytes, 0, $e.Bytes.Length) }
 $w.Flush(); $w.Dispose(); $fs.Dispose()
-Write-Host "wrote twinstance.ico ($($streams.Count) sizes)"
+Write-Host "wrote twinstall.ico ($($streams.Count) sizes)"
 
 # ------------------------------------------------------------ MSIX assets --
-$pkg = Join-Path $repo 'src/Twinstance.Package/Assets'
+$pkg = Join-Path $repo 'src/Twinstall.Package/Assets'
 New-Item -ItemType Directory -Force $pkg | Out-Null
 $msix = @{
     'Square44x44Logo.png'   = 44

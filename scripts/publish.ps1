@@ -1,19 +1,19 @@
 <#
 .SYNOPSIS
-    Builds Twinstance release artifacts and their SHA-256 checksums.
+    Builds Twinstall release artifacts and their SHA-256 checksums.
 
 .DESCRIPTION
     Produces two layouts, both deliberately plain:
 
-      twinstance-<version>-win-x64.zip            framework-dependent, ~0.7 MB
+      twinstall-<version>-win-x64.zip            framework-dependent, ~0.7 MB
                                                  needs the .NET 8 Desktop Runtime installed
-      twinstance-<version>-win-x64-standalone.zip self-contained, ~160 MB
+      twinstall-<version>-win-x64-standalone.zip self-contained, ~160 MB
                                                  needs nothing installed
 
     Compression inside the single-file bundle is NEVER enabled. Measured on 7 Aug 2026:
     EnableCompressionInSingleFile=true produced a binary Bitdefender quarantined during the
     build itself, every attempt. A compressed payload expanded at run time is the defining
-    shape of a packer, and Twinstance - an unsigned protocol handler that reads process command
+    shape of a packer, and Twinstall - an unsigned protocol handler that reads process command
     lines - has no business also looking packed. See docs/BUILDING.md.
 
     Self-locating: run it from anywhere.
@@ -31,8 +31,8 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repo = Split-Path -Parent $PSScriptRoot
-$project = Join-Path $repo 'src/Twinstance.App/Twinstance.App.csproj'
-if (-not (Test-Path $project)) { throw "Cannot find $project - is this the Twinstance repository?" }
+$project = Join-Path $repo 'src/Twinstall.App/Twinstall.App.csproj'
+if (-not (Test-Path $project)) { throw "Cannot find $project - is this the Twinstall repository?" }
 
 if (-not $OutputDirectory) { $OutputDirectory = Join-Path $repo 'artifacts' }
 $staging = Join-Path $OutputDirectory 'staging'
@@ -42,7 +42,7 @@ New-Item -ItemType Directory -Force $staging | Out-Null
 
 # Tests gate the release. The exit code is the result; there is no framework to interpret.
 Write-Host "`n== tests ==" -ForegroundColor Cyan
-dotnet run --project (Join-Path $repo 'src/Twinstance.Tests') -c $Configuration
+dotnet run --project (Join-Path $repo 'src/Twinstall.Tests') -c $Configuration
 if ($LASTEXITCODE -ne 0) { throw "Tests failed - not publishing." }
 
 $version = (Select-Xml -Path (Join-Path $repo 'Directory.Build.props') -XPath '//Version').Node.InnerText
@@ -70,9 +70,9 @@ function Publish-Single {
               "antivirus quarantined the output mid-build - check its logs before assuming a file lock."
     }
 
-    $built = Join-Path $dir 'Twinstance.exe'
+    $built = Join-Path $dir 'Twinstall.exe'
     if (-not (Test-Path $built)) {
-        throw "$Name produced no Twinstance.exe - it was most likely quarantined. Check your AV."
+        throw "$Name produced no Twinstall.exe - it was most likely quarantined. Check your AV."
     }
 
     $final = Join-Path $OutputDirectory $FileName
@@ -82,9 +82,9 @@ function Publish-Single {
 
 $files = @()
 # Small, but the target machine needs the .NET 8 Desktop Runtime.
-$files += Publish-Single -Name 'portable' -FileName "Twinstance-$version.exe" -ExtraArgs @('-r', $Runtime, '--self-contained:false')
+$files += Publish-Single -Name 'portable' -FileName "Twinstall-$version.exe" -ExtraArgs @('-r', $Runtime, '--self-contained:false')
 # Large, but needs nothing installed at all.
-$files += Publish-Single -Name 'standalone' -FileName "Twinstance-$version-standalone.exe" -ExtraArgs @('-r', $Runtime, '--self-contained')
+$files += Publish-Single -Name 'standalone' -FileName "Twinstall-$version-standalone.exe" -ExtraArgs @('-r', $Runtime, '--self-contained')
 
 Remove-Item $staging -Recurse -Force -ErrorAction SilentlyContinue
 
@@ -98,6 +98,6 @@ $lines = foreach ($f in $files) {
 $lines | Set-Content (Join-Path $OutputDirectory 'SHA256SUMS.txt') -Encoding ascii
 
 Write-Host "`nArtifacts in $OutputDirectory" -ForegroundColor Green
-Write-Host "Each is one file. Running it offers to install into %LOCALAPPDATA%\Programs\Twinstance."
+Write-Host "Each is one file. Running it offers to install into %LOCALAPPDATA%\Programs\Twinstall."
 Write-Host "Publish SHA256SUMS.txt alongside the release so people can verify what they downloaded."
 Write-Host "These binaries are UNSIGNED - see SECURITY.md before sharing them." -ForegroundColor Yellow

@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="docs/images/logo.png" width="96" alt="Twinstance">
+<img src="docs/images/logo.png" width="96" alt="Twinstall">
 
-# Twinstance
+# Twinstall
 
 **Use two accounts of the same app at the same time on Windows** — and have the sign-in
 actually land on the one you meant.
@@ -19,7 +19,7 @@ You have two accounts for the same app — work and personal, two clients, two o
 and Windows only lets you be signed into one at a time. So you sign out, sign in, sign out
 again, all day.
 
-Twinstance gives each account its own copy of the app, running side by side, with a coloured
+Twinstall gives each account its own copy of the app, running side by side, with a coloured
 badge on each so you can tell them apart at a glance.
 
 <div align="center">
@@ -28,7 +28,7 @@ badge on each so you can tell them apart at a glance.
 
 **It also fixes the part that makes this hard.** Signing in opens your browser, and when the
 browser hands you back, Windows always returns you to the *first* copy — so the second account
-can never finish signing in. Twinstance catches that hand-off and sends it to the window you
+can never finish signing in. Twinstall catches that hand-off and sends it to the window you
 started from.
 
 ---
@@ -41,8 +41,8 @@ Grab **one file** from the [**Releases page**](../../releases):
 
 | Download this | Size | If |
 |---|---|---|
-| **`Twinstance-standalone.exe`** | ~147 MB | you want it to just work — **pick this one if unsure** |
-| `Twinstance.exe` | ~0.6 MB | you already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
+| **`Twinstall-standalone.exe`** | ~147 MB | you want it to just work — **pick this one if unsure** |
+| `Twinstall.exe` | ~0.6 MB | you already have the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) |
 
 There is nothing to unzip. It is one file.
 
@@ -53,14 +53,14 @@ It collects nothing and sends nothing — there is no network code in it at all.
 
 Double-click it. Windows will probably say **"Windows protected your PC"** — this is expected,
 and it is not a sign that anything is wrong. It happens to every program that hasn't paid for a
-code-signing certificate yet, and Twinstance hasn't.
+code-signing certificate yet, and Twinstall hasn't.
 
 > Click **More info**, then **Run anyway**.
 
 If you would rather not take that on trust, you can check the file against the published
 checksums or build it yourself — both are explained in [SECURITY.md](SECURITY.md).
 
-Twinstance then offers to install itself into your own user folder. Say yes. There is no
+Twinstall then offers to install itself into your own user folder. Say yes. There is no
 administrator prompt and nothing is written outside your profile.
 
 ### 3 — Pick your app
@@ -69,7 +69,7 @@ administrator prompt and nothing is written outside your profile.
 
 It lists the apps it found on your PC. Click one, then **Check this app**.
 
-A window from that app will open and close by itself — that is Twinstance making sure the app
+A window from that app will open and close by itself — that is Twinstall making sure the app
 really supports separate accounts, rather than promising something it can't deliver.
 
 <img src="docs/images/02-check-result.png" width="560" alt="Check result">
@@ -83,10 +83,10 @@ Your existing account is already there. Click **Add an account**, give it a name
 
 ### 5 — Apply, and do the one step Windows insists on
 
-Twinstance shows you everything it is about to change, then does it.
+Twinstall shows you everything it is about to change, then does it.
 
 The very last step has to be you: **Windows does not allow any program to make itself the
-handler for sign-in links.** Twinstance opens the exact Settings page and shows you the two
+handler for sign-in links.** Twinstall opens the exact Settings page and shows you the two
 clicks to make.
 
 <img src="docs/images/04-last-step.png" width="560" alt="Final step">
@@ -104,9 +104,9 @@ That is it. Open your second account from the Start menu and sign in as normal.
 
 ### Removing it
 
-**Settings → Apps → Installed apps → Twinstance → Uninstall**, like any other program.
+**Settings → Apps → Installed apps → Twinstall → Uninstall**, like any other program.
 
-Your accounts and everything you're signed into are **not** deleted. Twinstance shows you where
+Your accounts and everything you're signed into are **not** deleted. Twinstall shows you where
 those folders are so you can remove them yourself if you want to.
 
 ---
@@ -116,11 +116,11 @@ those folders are so you can remove them yourself if you want to.
 <details>
 <summary><b>Is my data safe? Does this see my passwords?</b></summary>
 
-No. Twinstance never sees your password, and it has **no network code at all** — it cannot send
+No. Twinstall never sees your password, and it has **no network code at all** — it cannot send
 anything anywhere.
 
 When you sign in, your browser does that with the app's own servers exactly as it always has.
-Twinstance's only job is deciding *which window* the browser hands back to. Sign-in links are
+Twinstall's only job is deciding *which window* the browser hands back to. Sign-in links are
 recorded in a local log with the sensitive part stripped out before it is ever written to disk.
 
 [PRIVACY.md](PRIVACY.md) lists everything it stores and where; [SECURITY.md](SECURITY.md)
@@ -130,7 +130,7 @@ explains the handling in detail.
 <details>
 <summary><b>Why did my antivirus complain?</b></summary>
 
-Because Twinstance does several things that look, from the outside, like something suspicious:
+Because Twinstall does several things that look, from the outside, like something suspicious:
 it handles sign-in links, it reads which programs are running, and it changes taskbar icons.
 Those are the product, but a scanner can only see the shape.
 
@@ -143,14 +143,14 @@ what it does and what your sensible options are.
 
 It doesn't modify the app. It starts the app's own official copy with a setting the app already
 supports — the same one Chrome uses for profiles. Each account keeps its own folder, and the app
-itself has no idea Twinstance exists.
+itself has no idea Twinstall exists.
 </details>
 
 <details>
 <summary><b>My app isn't in the list.</b></summary>
 
 Use **Choose another app…** and point it at the program's `.exe`. The list is only a shortcut —
-apps that aren't on it work exactly the same way. Twinstance checks any app you give it and tells
+apps that aren't on it work exactly the same way. Twinstall checks any app you give it and tells
 you honestly if it won't work.
 </details>
 
@@ -174,8 +174,8 @@ Manager → Startup apps, where you can turn it off if you'd rather.
 - **Sign-in routing is a good guess, not magic.** It sends the link to the window you used most
   recently. Start the sign-in, then leave the other window alone until it finishes.
 - **Microsoft Teams (new)** can't be supported — it isn't built the way the others are.
-  Twinstance detects that and tells you rather than half-working.
-- **Some Microsoft Store apps** refuse to be started with settings at all. Twinstance says so
+  Twinstall detects that and tells you rather than half-working.
+- **Some Microsoft Store apps** refuse to be started with settings at all. Twinstall says so
   instead of blaming the app.
 </details>
 
@@ -188,8 +188,8 @@ Chromium/Electron, where its profiles live, which URL scheme it owns, and — by
 it once — whether it honours separate profiles at all. No per-app tables.
 
 ```bash
-dotnet build Twinstance.sln -c Release
-dotnet run --project src/Twinstance.Tests -c Release --no-build   # exit code is the result
+dotnet build Twinstall.sln -c Release
+dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 pwsh -File scripts/publish.ps1                                   # single-file releases
 ```
 
@@ -204,8 +204,8 @@ pwsh -File scripts/publish.ps1                                   # single-file r
 
 Two rules matter most:
 
-- `Twinstance.Core` targets `net8.0`, not `net8.0-windows`, so an OS call there **fails to
-  compile**. Decisions live there and are unit-tested; `Twinstance.Platform` only observes.
+- `Twinstall.Core` targets `net8.0`, not `net8.0-windows`, so an OS call there **fails to
+  compile**. Decisions live there and are unit-tested; `Twinstall.Platform` only observes.
 - Path matching is on exact normalised paths, never substrings. `work` and `work2` must stay
   distinct, and there's a regression test named after it.
 
@@ -218,7 +218,7 @@ marks entries as `measured` or `inferred` and most are still inferred.
 download until that changes. Until then, verify what you downloaded against the published
 `SHA256SUMS.txt`, or build it yourself — both are explained in [SECURITY.md](SECURITY.md).
 
-Twinstance has not yet been accepted into any code signing programme. The intended route is the
+Twinstall has not yet been accepted into any code signing programme. The intended route is the
 [SignPath Foundation](https://signpath.org/), which issues certificates to open source projects
 at no cost; when that is granted, this section will state:
 
@@ -229,7 +229,7 @@ Signing will not change how releases are produced. Binaries are built only by th
 [GitHub Actions workflow](.github/workflows/build.yml) from the source in this repository, on a
 tagged commit, and never from a developer's machine.
 
-**Who can do what.** Twinstance is a single-maintainer project today, so one person holds all
+**Who can do what.** Twinstall is a single-maintainer project today, so one person holds all
 three roles. They are listed separately because they are separate permissions, and because that
 stops being true the moment anyone else contributes.
 
@@ -241,7 +241,7 @@ stops being true the moment anyone else contributes.
 
 ## Privacy
 
-Twinstance collects nothing and transmits nothing. It contains **no network code at all** — not
+Twinstall collects nothing and transmits nothing. It contains **no network code at all** — not
 disabled, absent — so there is no telemetry, no analytics, no update check and no account. Your
 account names, badge colours and the app you configured stay in your own user folder.
 
@@ -256,9 +256,9 @@ Full detail, including exactly what is stored and where: [PRIVACY.md](PRIVACY.md
 
 ## Trademarks
 
-Twinstance is not affiliated with, endorsed by, or sponsored by Anthropic, Slack Technologies,
+Twinstall is not affiliated with, endorsed by, or sponsored by Anthropic, Slack Technologies,
 Discord, Microsoft, Signal, or any other application vendor. Product names are trademarks of
 their respective owners and are used only to describe compatibility.
 
-**No third-party artwork ships with Twinstance.** Badged icons are composed at run time from the
+**No third-party artwork ships with Twinstall.** Badged icons are composed at run time from the
 copy of the application already installed on your machine.

@@ -31,7 +31,7 @@
       "hints": ["%LOCALAPPDATA%\\Programs\\Microsoft VS Code", "%ProgramFiles%\\Microsoft VS Code"],
       "verified": false,
       "provenance": "measured",
-      "note": "Has native profiles too; Twinstance adds taskbar badging and callback routing. Verified 7 Aug 2026. Note the layout: only Code.exe sits at the install root and every Chromium marker lives in a commit-hash folder beside it, so this app is only detected because ChromiumDetector sweeps one level of subdirectories. Unlike Slack's stub, the root executable does forward --user-data-dir - it passed in 3.6s. Scheme vscode://."
+      "note": "Has native profiles too; Twinstall adds taskbar badging and callback routing. Verified 7 Aug 2026. Note the layout: only Code.exe sits at the install root and every Chromium marker lives in a commit-hash folder beside it, so this app is only detected because ChromiumDetector sweeps one level of subdirectories. Unlike Slack's stub, the root executable does forward --user-data-dir - it passed in 3.6s. Scheme vscode://."
     },
     {
       "id": "loom",

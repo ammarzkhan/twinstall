@@ -1,4 +1,4 @@
-# Twinstance — engineering notes
+# Twinstall — engineering notes
 
 Read this before changing anything. It exists so nobody re-derives facts that were paid for
 once already, or undoes decisions that look arbitrary but aren't.
@@ -9,7 +9,7 @@ wrong, and those are kept deliberately, because the wrong theory is usually the 
 
 ---
 
-## What Twinstance is
+## What Twinstall is
 
 A Windows tool that lets someone run **two accounts of the same Chromium/Electron desktop app
 side by side** — Slack, Discord, VS Code, Signal, Claude — and have browser sign-in callbacks
@@ -27,7 +27,7 @@ Two problems, both real, both solved here:
 2. **You can't tell the windows apart.** Same exe, same AppUserModelID, so Windows draws
    identical taskbar buttons and merges them.
 
-Twinstance takes over the scheme and dispatches by **Z-order** (the window highest in the stack is
+Twinstall takes over the scheme and dispatches by **Z-order** (the window highest in the stack is
 the one you were last in, and that survives the browser stealing focus), and puts Chrome-style
 coloured badges on the taskbar icons.
 
@@ -35,7 +35,7 @@ coloured badges on the taskbar icons.
 
 ## Current state — read this carefully
 
-**The application exists and works.** `Twinstance.exe` builds, routes, launches, badges and
+**The application exists and works.** `Twinstall.exe` builds, routes, launches, badges and
 configures itself, and every adapter has now been executed against real applications. What
 remains unbuilt is packaging, not function.
 
@@ -43,10 +43,10 @@ remains unbuilt is packaging, not function.
 
 | | State |
 |---|---|
-| `src/Twinstance.Core` | ✅ analysed clean, **155/155 tests passing** |
-| `src/Twinstance.Tests` | ✅ 155 assertions, console runner, exit code is the result |
-| `src/Twinstance.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
-| `src/Twinstance.App` | ✅ `Twinstance.exe` — router, launcher, icon watcher, management UI |
+| `src/Twinstall.Core` | ✅ analysed clean, **155/155 tests passing** |
+| `src/Twinstall.Tests` | ✅ 155 assertions, console runner, exit code is the result |
+| `src/Twinstall.Platform` | ✅ analyser-clean, **every adapter has now run on a real machine** |
+| `src/Twinstall.App` | ✅ `Twinstall.exe` — router, launcher, icon watcher, management UI |
 | **Detection, all steps** | ✅ verified against Claude, Slack and VS Code |
 | Release artifacts | ✅ `scripts/publish.ps1` → two single-file exes + `SHA256SUMS.txt` |
 | Code signing | ❌ unsigned; the real fix for AV/SmartScreen and not yet done |
@@ -75,7 +75,7 @@ recorded here rather than its code.
 
 ## Architecture rules — do not break these
 
-**1. `Twinstance.Core` targets `net8.0`, NOT `net8.0-windows`. Keep it that way.**
+**1. `Twinstall.Core` targets `net8.0`, NOT `net8.0-windows`. Keep it that way.**
 Everything in Core is a *decision*: path comparison, package-name derivation, command-line
 parsing, Chromium detection, isolation checks, route selection. No Win32, no WMI, no GDI+, no
 registry, no file I/O beyond reading a config. The target framework is what enforces it — a
@@ -83,7 +83,7 @@ Windows call there fails to compile. CI has a `core-portability` job that runs t
 suite on Ubuntu for the same reason. If you need an OS fact in a decision, **pass it in as a
 parameter** (that's why `ChromiumDetector.Score` takes a `Func<string,bool> fileExists`).
 
-**2. `Twinstance.Platform` holds no decisions.** It observes Windows and returns facts. If you
+**2. `Twinstall.Platform` holds no decisions.** It observes Windows and returns facts. If you
 find yourself writing an `if` about *which instance* inside Platform, it belongs in Core where
 it can be tested.
 
@@ -101,15 +101,15 @@ conflated. There is a regression test named after it.
 ## Build and test
 
 ```bash
-dotnet build Twinstance.sln -c Release
-dotnet run --project src/Twinstance.Tests -c Release --no-build   # exit code is the result
+dotnet build Twinstall.sln -c Release
+dotnet run --project src/Twinstall.Tests -c Release --no-build   # exit code is the result
 ```
 
 Expect `passed: 155   failed: 0`. There is no test framework — the runner is a console app, so it
 works with no restore and runs under mono too.
 
-`Twinstance.Core` and `Twinstance.Tests` have **zero package references** and build offline.
-`Twinstance.Platform` needs `System.Drawing.Common` and `System.Management` from NuGet.
+`Twinstall.Core` and `Twinstall.Tests` have **zero package references** and build offline.
+`Twinstall.Platform` needs `System.Drawing.Common` and `System.Management` from NuGet.
 
 **Warnings are errors in all three projects now, Platform included.** Platform's opt-out is gone
 and it was earned, not abandoned: the rules it was hedging against — CA2000 disposal, CA1416
@@ -121,7 +121,7 @@ both are fixed.
 clean, because `AnalysisLevel` in `Directory.Build.props` re-derives the mode and wins. Use:
 
 ```bash
-dotnet build Twinstance.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
+dotnet build Twinstall.sln -c Release --no-incremental -p:AnalysisLevel=latest-all -p:TreatWarningsAsErrors=false
 ```
 
 That reports **10 warnings**, all deliberate and all commented at the source: `CA1002` on the
@@ -132,7 +132,7 @@ wrap a **caller-supplied delegate** (`listSubdirectories` in `ChromiumDetector` 
 lambda throws; an unreadable folder must count as a miss, not a crash. CI fails if the count
 goes above 10.
 
-`Twinstance.App` additionally suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` **in that
+`Twinstall.App` additionally suppresses `CA1303`, `CA2213`, `CA2000` and `CA1308` **in that
 project only**, with the reasoning in its `.csproj`. They are WinForms ownership false positives
 — a Form disposes its `Controls`, and `Application.Run` disposes the Form. One consequence worth
 knowing: **a disposable field that is *not* added to `Controls` — a `Font`, `Bitmap` or `Timer` —
@@ -201,7 +201,7 @@ Every Store app therefore failed preset lookup while Slack (under `%LOCALAPPDATA
 **The trap: an interactive shell can list it, so testing from a terminal never reproduces this.**
 Not elevation and not bitness — both were checked and ruled out. The bug only appears from a
 plain GUI process. **Confirm filesystem permissions from the application's own process**, which
-is what `Twinstance.exe --presets` is for: it traces every hint and prints the actual exception
+is what `Twinstall.exe --presets` is for: it traces every hint and prints the actual exception
 instead of a silent "not found".
 
 **`MrtCache` is the way in.** `HKCU\Software\Classes\Local Settings\MrtCache` is readable without
@@ -224,11 +224,11 @@ progress, not for refusals.
 
 **Reading back "am I the handler?" is where this goes wrong.** Choosing an app in Settings does
 **not** write `HKCU\Software\Classes\<scheme>`. Measured on Windows 11, 7 Aug 2026, immediately
-after picking Twinstance for `claude://`:
+after picking Twinstall for `claude://`:
 
 ```
 HKCU\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\claude\UserChoiceLatest\ProgId
-    ProgId = Twinstance.Url.claude
+    ProgId = Twinstall.Url.claude
 ```
 
 Three separate surprises in one path, and each was checked because the previous guess was wrong:
@@ -305,7 +305,7 @@ folder layout and the framework-dependent one.
 | **Single-file, compressed** | 65 MB | ❌ quarantined, reproducibly |
 
 A compressed payload expanded at run time is the defining shape of a packer. The setting is
-pinned off in `Twinstance.App.csproj` with the reasoning beside it, and `scripts/publish.ps1`
+pinned off in `Twinstall.App.csproj` with the reasoning beside it, and `scripts/publish.ps1`
 throws rather than shipping something that was quarantined out from under it.
 
 Note the diagnosis order here, because the repo has burned time on this before: the first theory
@@ -360,7 +360,7 @@ switching" and "single active account only", putting **Claude** and **Loom** in 
 Both were measured here as `Honoured`, and two Claude instances have run side by side on the dev
 machine throughout.
 
-That kind of list describes **an app's own account-switching UI**. Twinstance asks a different
+That kind of list describes **an app's own account-switching UI**. Twinstall asks a different
 question — *does the app honour `--user-data-dir`* — and nearly every Electron app does
 regardless of what its UI offers. That gap is the reason this product exists, so never let such
 a list gate which apps are offered, and never let presence in `apps.json` stand in for the
@@ -373,7 +373,7 @@ false "this app doesn't support profiles".
 **A scheme's registered handler does not tell you whose scheme it is.** On the dev machine
 `HKCU\Software\Classes\claude\shell\open\command` points at **`ClaudeRouter.exe`** — the
 predecessor tool — not at Claude. Matching only on "the command references this executable"
-therefore finds nothing for precisely the app Twinstance exists to fix, because an
+therefore finds nothing for precisely the app Twinstall exists to fix, because an
 already-taken-over scheme is the normal state of a machine that has been set up before.
 
 So step 4 uses two sources: the registry for *who holds it now*, and the package manifest for
@@ -384,7 +384,7 @@ show the current holder rather than silently taking over.
 **An MSIX package manifest can be read straight off disk — no WinRT needed.**
 `C:\Program Files\WindowsApps\<PackageFullName>\AppxManifest.xml` is readable despite the
 folder's ACLs, and `<uap3:Protocol Name="claude" />` is right there. This matters more than it
-sounds: `PackageManager` would have forced `Twinstance.Platform` onto a
+sounds: `PackageManager` would have forced `Twinstall.Platform` onto a
 `net8.0-windows10.0.19041.0` target and dragged WinRT into the build. Parsing the XML instead
 keeps the logic in **Core**, where it is unit-tested and runs on Ubuntu in CI.
 
@@ -438,8 +438,8 @@ Load-bearing properties — don't simplify these away:
 Detection found five real defects in itself while being tested, all recorded in the facts section
 above. That is the argument for running each step against a real machine before moving on.
 
-**3b–3d. Router, launcher and UI — ✅ DONE.** All three live in `src/Twinstance.App` as one
-`Twinstance.exe`, because the MSIX manifest declares a single executable and a handler that is
+**3b–3d. Router, launcher and UI — ✅ DONE.** All three live in `src/Twinstall.App` as one
+`Twinstall.exe`, because the MSIX manifest declares a single executable and a handler that is
 also the app the user configured is easier to reason about than a pair that must stay in step.
 
 | File | Job |
@@ -455,7 +455,7 @@ Things not to undo:
 - **`Log.SafeUrl` strips the query and fragment.** A callback query is a live OAuth code and the
   log is an ordinary file in the user's profile. Every path that logs a URL goes through it.
 - **A missing or corrupt config falls back to the default profile** rather than stranding
-  someone mid-sign-in. That is what would have happened without Twinstance at all.
+  someone mid-sign-in. That is what would have happened without Twinstall at all.
 - **`NeedsPrompt` asks.** When nothing is running, Z-order knows nothing; guessing is how a link
   lands in the wrong account.
 - **The taskbar setting is opt-in**, off by default, and labelled as system-wide.

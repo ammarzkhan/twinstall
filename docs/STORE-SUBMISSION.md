@@ -5,7 +5,7 @@ Ordered so the thing that can kill the project is first.
 ## 0. De-risk before building (do this first)
 
 - [ ] Register a Partner Center individual account (~$19 one-off)
-- [ ] Reserve the name **Twinstance**
+- [ ] Reserve the name **Twinstall**
 - [ ] Build a minimal MSIX declaring **one** third-party protocol (see `AppxManifest.xml`)
 - [ ] Submit it and record the certification outcome
 - [ ] If rejected: fall back to user-initiated `RegisteredApplications` registration, or ship
@@ -42,7 +42,7 @@ Everything below is wasted effort if this step fails, which is why it is first.
 
 ## 4. Trademark hygiene
 
-- [ ] Trademark search for "Twinstance" in classes 9 and 42 before launch. A quick web search
+- [ ] Trademark search for "Twinstall" in classes 9 and 42 before launch. A quick web search
       found no collisions, but that is not clearance — Twinify, TwinUp and Twinit are all taken
       in the digital-twin space, so the neighbourhood is busy even though this exact word is free
 - [ ] Disclaimer in listing and README: not affiliated with, endorsed by, or sponsored by any

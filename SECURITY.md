@@ -9,12 +9,12 @@ repository. Please don't file a public issue for anything exploitable.
 
 ## Read this before your antivirus does
 
-Twinstance does several things that look, from a behavioural-detection point of view, exactly
+Twinstall does several things that look, from a behavioural-detection point of view, exactly
 like malware. It is better that you hear it here than from a quarantine notification.
 
 **It registers itself as a URL protocol handler.** An unsigned executable in `%LOCALAPPDATA%`
 that claims `slack://` or `claude://` is a recognised hijack pattern, because that is precisely
-how credential-stealing middleware inserts itself into a sign-in flow. Twinstance *is* middleware
+how credential-stealing middleware inserts itself into a sign-in flow. Twinstall *is* middleware
 in a sign-in flow. The difference is what it does with the link, not the shape of the mechanism.
 
 **It reads other processes' command lines.** Matching a window to a profile means asking WMI for
@@ -45,7 +45,7 @@ the honest options are to inspect the source, build it yourself, or not run it.
 
 ---
 
-## How Twinstance is built, and why it isn't packed
+## How Twinstall is built, and why it isn't packed
 
 **Measured, 7 August 2026.** Publishing with .NET's `EnableCompressionInSingleFile=true`
 produced a binary that Bitdefender quarantined **during the build itself**, mid-bundle, on four
@@ -64,11 +64,11 @@ folder layout and the framework-dependent one.
 
 The heuristic is not being unreasonable. A compressed payload embedded in an executable and
 expanded at run time is the defining structure of a packer or dropper, and packing is what
-malware does to defeat static analysis. Twinstance is already an unsigned protocol handler that
+malware does to defeat static analysis. Twinstall is already an unsigned protocol handler that
 enumerates other processes' command lines. It does not need to also look packed.
 
 **Releases therefore never enable compression.** The setting is pinned off in
-[`Twinstance.App.csproj`](src/Twinstance.App/Twinstance.App.csproj) with the reasoning next to it,
+[`Twinstall.App.csproj`](src/Twinstall.App/Twinstall.App.csproj) with the reasoning next to it,
 and [`scripts/publish.ps1`](scripts/publish.ps1) fails loudly rather than shipping an artifact
 that was quarantined out from under it.
 
@@ -76,7 +76,7 @@ that was quarantined out from under it.
 
 It may. The binaries are **unsigned**, which means they carry no publisher reputation at all, and
 SmartScreen will show "Windows protected your PC" for a new unsigned executable regardless of
-what is inside it. Behavioural engines may also fire at the moment Twinstance registers itself as
+what is inside it. Behavioural engines may also fire at the moment Twinstall registers itself as
 a protocol handler, which no amount of build tuning will change — that is the product working.
 
 Reasonable things to do:
@@ -84,7 +84,7 @@ Reasonable things to do:
 1. **Check the hash.** Every release ships `SHA256SUMS.txt`. Verify the file you downloaded is
    the file that was published:
    ```
-   Get-FileHash .\twinstance-0.3.0-win-x64.zip -Algorithm SHA256
+   Get-FileHash .\twinstall-0.3.0-win-x64.zip -Algorithm SHA256
    ```
 2. **Build it yourself.** One command, no network beyond NuGet — see
    [docs/BUILDING.md](docs/BUILDING.md). A binary you compiled from source you can read is
@@ -101,25 +101,25 @@ build it from source or not run it, not to blind the thing that is protecting yo
 
 ## Code signing
 
-The real fix is an Authenticode certificate, and Twinstance does not have one yet. Signing gives
+The real fix is an Authenticode certificate, and Twinstall does not have one yet. Signing gives
 the binary an identity, lets reputation accumulate across installs, and removes the SmartScreen
 warning once it has. Until then, unsigned releases plus published hashes plus reproducible
 source is the honest offer — not a claim that the warnings are wrong.
 
 ---
 
-## What Twinstance touches
+## What Twinstall touches
 
 Everything is per-user. There is no service, no driver, no admin elevation, and nothing outside
 your own profile.
 
 | Location | What | Removed by |
 |---|---|---|
-| `%LOCALAPPDATA%\Twinstance\` | config, log, composed icons | "Remove Twinstance's changes" |
-| `HKCU\Software\Classes\Twinstance.Url.<scheme>` | our own ProgId | same |
-| `HKCU\Software\Twinstance\Capabilities` | UrlAssociations declaration | same |
+| `%LOCALAPPDATA%\Twinstall\` | config, log, composed icons | "Remove Twinstall's changes" |
+| `HKCU\Software\Classes\Twinstall.Url.<scheme>` | our own ProgId | same |
+| `HKCU\Software\Twinstall\Capabilities` | UrlAssociations declaration | same |
 | `HKCU\Software\RegisteredApplications` | one value naming the above | same |
-| `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Twinstance\` | per-instance shortcuts | same |
+| `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Twinstall\` | per-instance shortcuts | same |
 | `HKCU\...\Explorer\Advanced\TaskbarGlomLevel` | **only if you tick the box** | set it back yourself |
 
 Your profile folders and everything signed into them are never deleted by the uninstall path.
@@ -127,7 +127,7 @@ That is deliberate — those contain live sessions and are yours to remove.
 
 ### It does not write the scheme key directly
 
-Twinstance registers a ProgId and a `UrlAssociations` capability under `RegisteredApplications`,
+Twinstall registers a ProgId and a `UrlAssociations` capability under `RegisteredApplications`,
 and then **you** choose it in Settings → Default apps. It never writes
 `HKCU\Software\Classes\<scheme>\shell\open\command` behind your back. That shortcut is what the
 predecessor tool did; it is a genuine hijack, it loses to a Store app's declared protocol anyway,
@@ -139,15 +139,15 @@ and it is the part of Microsoft Store policy 10.2.8 this would fail.
 
 **Sign-in callbacks carry live OAuth authorization codes in their query strings.**
 
-The log at `%LOCALAPPDATA%\Twinstance\twinstance.log` records every routing decision, because a
+The log at `%LOCALAPPDATA%\Twinstall\twinstall.log` records every routing decision, because a
 link opening the wrong account leaves no other evidence. Every URL is written through a single
 redaction function that strips the query and fragment before the string reaches disk:
 
 ```
-2026-08-07 03:40:03  url: claude://twinstance/route-check?<redacted>
+2026-08-07 03:40:03  url: claude://twinstall/route-check?<redacted>
 ```
 
-Twinstance never parses, stores, transmits or inspects the contents of a callback. It reads the
+Twinstall never parses, stores, transmits or inspects the contents of a callback. It reads the
 scheme to know the link is for it, and passes the URL through to the target application
 unchanged. **There is no network code in this project at all.**
 
@@ -156,8 +156,8 @@ unchanged. **There is no network code in this project at all.**
 - **Routing is a heuristic.** Z-order picks the window you used most recently. It is right when
   you begin sign-in from the window you are in, and wrong if you alt-tab mid-flow. Every choice
   is logged, so a mis-route is diagnosable rather than mysterious.
-- **A malicious app that already runs as you can do everything Twinstance does.** It grants no
+- **A malicious app that already runs as you can do everything Twinstall does.** It grants no
   privilege that wasn't already available to any program in your user session.
-- **Twinstance sits in an authentication path.** If you don't trust the binary, don't make it your
+- **Twinstall sits in an authentication path.** If you don't trust the binary, don't make it your
   default handler. Building from source takes one command; see
   [docs/BUILDING.md](docs/BUILDING.md).
