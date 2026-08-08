@@ -4,36 +4,6 @@ Notable changes to Twinstall. Format follows [Keep a Changelog](https://keepacha
 
 ## [0.5.0] — 2026-08-08
 
-### Changed — the project is called Twinstall again
-
-**0.4.0 renamed Twinstall to Twinstance for a reason that turned out to be false.** It stated
-that `twinstall.com` belonged to an unrelated company. It does not. That domain hosts nothing at
-all, and sits unsold on a broker's shelf alongside `twinstance.com`. The firm trading as
-Twinstall is Dutch, sells window-frame wrapping in Utrecht, and is at `twinstall.nl` — it never
-held the `.com`, and it does not sell software.
-
-The searchability concern behind the rename was real, but it was never the deciding factor it
-was treated as. Searching a name is how somebody who has *already heard of a tool* confirms they
-have found the right one. It is not how anyone discovers a two-day-old project in the first
-place, under any name, so a name cannot be chosen on it alone.
-
-Neither name is uncontested. `Twinstall` collides with the Dutch firm and with TWRP's
-`twinstall.cpp`; `Twinstance` collides with an Indian web-design LLP. Between two imperfect
-options the better name for the product wins, and this one describes what the program actually
-does — it installs a twin.
-
-Nothing about how it works has changed. The identifiers move back with the name:
-
-- The executable is `Twinstall.exe`, installed to `%LOCALAPPDATA%\Programs\Twinstall`.
-- Settings live in `%LOCALAPPDATA%\Twinstall`.
-- The protocol handler registers as `Twinstall.Url.<scheme>`, under a `Twinstall` entry in
-  `RegisteredApplications`.
-
-As in 0.4.0, builds under the two names cannot uninstall each other — each removes only the
-entries bearing its own name. **This time that affects nobody.** Every 0.4.1 release asset shows
-zero downloads, 0.4.0 shows two, both from the author's own machine, and the repository has no
-clones, views, stars or forks. There is no migration to perform and no warning worth printing.
-
 ### Fixed — installing from a build tree produced a copy that could not launch an account
 
 **Released builds were never affected**, which is why this survived unnoticed: `publish.ps1` sets
@@ -51,12 +21,10 @@ while the application itself looked healthy.
 `runtimes` is now copied too, recursively, because `runtimes\win\lib\net8.0` is four levels down
 and the previous single-level copy would have produced an empty folder.
 
-## [0.4.1] — 2026-08-08
-
 ### Fixed — a Store update no longer breaks the setup
 
-Updating a Microsoft Store app broke Twinstance until it was set up again from scratch. Every
-launch reported *"Twinstance cannot find the application it was set up for"*, and nothing the
+Updating a Microsoft Store app broke Twinstall until it was set up again from scratch. Every
+launch reported *"Twinstall cannot find the application it was set up for"*, and nothing the
 user had done caused it.
 
 Windows carries the version inside an MSIX install path, so `Claude_1.25927.0.0_x64__pzs8sxrjxfjjc`
@@ -65,7 +33,7 @@ folder is deleted. The saved configuration recorded that absolute path, which ma
 an expiry date: correct when written, invalid at the next update, for every packaged app and every
 user. It was caught when Claude updated underneath a working install on 8 August 2026.
 
-Twinstance now notices the app moved and follows it. The package *family* — `Claude_pzs8sxrjxfjjc`
+Twinstall now notices the app moved and follows it. The package *family* — `Claude_pzs8sxrjxfjjc`
 — is stable across versions, so the stale path is enough to identify the new one, and the layout
 below the package root carries over unchanged. The configuration is rewritten and the launch
 proceeds. It is a log line, not a dialog: the user had no part in this and has nothing to decide.
@@ -76,8 +44,8 @@ executable would be far worse than reporting it as missing.
 
 ### Fixed — the only way to undo a setup was hidden on PCs with several apps installed
 
-"Remove Twinstance's changes" sat at the bottom of step 1, under the list of applications found
-on the PC — and the length of that list is decided by the machine, not by the program. Twinstance
+"Remove Twinstall's changes" sat at the bottom of step 1, under the list of applications found
+on the PC — and the length of that list is decided by the machine, not by the program. Twinstall
 knows about twenty apps; a PC with five of them installed produced a page 502px tall inside a
 448px panel, so the button was below the fold, reachable only by scrolling. Nothing else in the
 window removes a setup once it is finished, and step 1 is the one screen nobody thinks to scroll:
@@ -99,42 +67,9 @@ Two things follow from it no longer being page content:
   the control still executing it. That is the exact hazard `ShowLater` was added for. As
   permanent chrome it is never disposed, so the deferral is not needed and the risk is gone.
 
-## [0.4.0] — 2026-08-08
-
-### Changed — the project is now called Twinstance
-
-> **Correction, 8 August 2026.** The claim below that `twinstall.com` belongs to an unrelated
-> company is false — the domain hosts nothing and is unsold. The rename was reversed in
-> [0.5.0](#050--2026-08-08). The entry is left as published rather than quietly edited, because a
-> changelog that revises its own history is worth less than one that admits a mistake.
-
-The previous name was Twinstall. `twinstall.com` belongs to an unrelated company, and the rest of
-the first page of results was already spoken for by a Tripwire install script and a TWRP header
-file. None of that is a trademark problem. But a tool aimed squarely at people who are not
-comfortable installing software is badly served by a name they cannot successfully search for,
-and the cost of changing it only ever goes up.
-
-There are no functional changes in this release. Everything the old name touched moved with it,
-and three of those are not cosmetic:
-
-- The executable is `Twinstance.exe`, installed to `%LOCALAPPDATA%\Programs\Twinstance`.
-- Settings live in `%LOCALAPPDATA%\Twinstance`.
-- The protocol handler registers as `Twinstance.Url.<scheme>`, under a `Twinstance` entry in
-  `RegisteredApplications`.
-
-**Anyone already running 0.3.0 should uninstall it first** — Settings → Apps → Installed apps →
-Twinstall → Uninstall — then install 0.4.0 and pick Twinstance again as the default handler.
-The two builds cannot tidy up after each other: each cleans only the registry entries and
-shortcuts bearing its own name, and by every identifier that matters, the old install is a
-different program. Account profiles are unaffected. They belong to the app being duplicated, not
-to this one, so existing sign-ins survive the change.
-
-0.3.0 was published for a day and downloaded by nobody. Its release has been removed rather than
-left on the releases page under a name that no longer refers to anything.
-
 ## [0.3.0] — 2026-08-07
 
-*Released under the previous name, Twinstall. Withdrawn; superseded by 0.4.0.*
+*Withdrawn; superseded by 0.5.0.*
 
 
 ### Added — it is one file now, and it installs itself
@@ -145,10 +80,10 @@ cosmetic: shortcuts and the registered protocol handler both record an absolute 
 run from Downloads stops routing sign-ins the moment that folder is tidied up, with nothing to
 say why.
 
-- **Releases are single executables.** `Twinstance-<version>.exe` (~0.6 MB, needs the .NET 8
-  Desktop Runtime) and `Twinstance-<version>-standalone.exe` (~147 MB, needs nothing). The
+- **Releases are single executables.** `Twinstall-<version>.exe` (~0.6 MB, needs the .NET 8
+  Desktop Runtime) and `Twinstall-<version>-standalone.exe` (~147 MB, needs nothing). The
   presets are embedded, so a single file really is a single file.
-- **First run offers to install.** It copies itself to `%LOCALAPPDATA%\Programs\Twinstance`, adds
+- **First run offers to install.** It copies itself to `%LOCALAPPDATA%\Programs\Twinstall`, adds
   a Start-menu entry for itself, registers in Settings → Apps → Installed apps, and relaunches
   from there. Declining runs it in place, which is fine for a look.
 - Neither build enables single-file compression. That gets the output quarantined mid-bundle —
@@ -158,9 +93,9 @@ say why.
 
 - **Renaming an account left its old shortcut behind for ever.** Shortcuts were only ever added,
   never reconciled, so a Start menu accumulated one entry per name an account had ever had.
-  Twinstance's own shortcuts are now cleared before writing the current set.
+  Twinstall's own shortcuts are now cleared before writing the current set.
 
-  They are identified by *where they point* — a target named `Twinstance.exe` with a `--launch`
+  They are identified by *where they point* — a target named `Twinstall.exe` with a `--launch`
   argument — not by name, so a desktop is never swept for a pattern. Matching on the full path
   was tried first and was wrong: shortcuts left by an earlier install location point at the old
   folder, which is precisely the stale case worth removing.
@@ -175,7 +110,7 @@ saw was four things they could not do yet.
   of which you do not have, is not a menu — it is a quiz. The list is now built by resolving
   every preset against this machine.
 - **Results are in plain language**, as ticked statements — "Built on Chromium, so it supports
-  separate profiles", "Sign-in links use slack:// — Twinstance can route those" — with the
+  separate profiles", "Sign-in links use slack:// — Twinstall can route those" — with the
   technical dump moved behind a *Technical details* toggle for when it is wanted.
 - **Follows the system theme**, light or dark, including the title bar, and uses the user's own
   Windows accent colour rather than a hard-coded brand colour.
@@ -203,8 +138,8 @@ one step that matters was the one the app was quietest about.
 ### Added
 
 - **One button that lands on the right page.**
-  `ms-settings:defaultapps?registeredAppUser=Twinstance` opens Settings at
-  *Apps → Default apps → Twinstance*, where the scheme is the only thing listed and
+  `ms-settings:defaultapps?registeredAppUser=Twinstall` opens Settings at
+  *Apps → Default apps → Twinstall*, where the scheme is the only thing listed and
   "Choose a default" is one click away. No searching, and no instructions for navigating there
   by hand — a button that opens the page makes them noise.
 
@@ -238,7 +173,7 @@ one step that matters was the one the app was quietest about.
   `scripts/make-logo.ps1` draws the identical geometry with GDI+ and emits the PNG set, a
   multi-size `.ico`, and the MSIX tile assets, so nothing is hand-drawn or unreproducible.
 
-  The accent is **teal**, chosen against two constraints rather than taste. Twinstance's icon
+  The accent is **teal**, chosen against two constraints rather than taste. Twinstall's icon
   sits in the taskbar directly beside Slack, Discord, VS Code and Claude, and must not read as
   an official add-on for any of them — so aubergine, blurple and Microsoft blue were out. And
   the per-account badge colours are the signal this product exists to provide, so the app's own
@@ -248,10 +183,10 @@ one step that matters was the one the app was quietest about.
   This replaces following the Windows accent colour. That is the right behaviour for a system
   utility and the wrong one for something with a brand of its own.
 
-  `assets/twinstance.ico` is the one exception to the repository's no-icons rule. That rule
+  `assets/twinstall.ico` is the one exception to the repository's no-icons rule. That rule
   exists to keep *other vendors'* artwork out, and is unchanged for every other case.
 
-- `Twinstance.exe --preview <1-5>` — opens one screen directly with representative data, so a
+- `Twinstall.exe --preview <1-5>` — opens one screen directly with representative data, so a
   layout change can be looked at without clicking through the flow. Seeds nothing, starts
   nothing, applies nothing.
 
@@ -277,7 +212,7 @@ one step that matters was the one the app was quietest about.
 
 ### Added
 
-- `Twinstance.exe --presets` — traces every preset hint, what it expands to, and the actual
+- `Twinstall.exe --presets` — traces every preset hint, what it expands to, and the actual
   exception when it finds nothing. Answers "why didn't it find my app?" without guesswork.
 - Preset list grown from 5 apps to 20: Loom and ClickUp (both measured), plus Cursor, Obsidian,
   Notion, Figma, GitHub Desktop, 1Password, Bitwarden, Joplin, Element, Postman, Insomnia,
@@ -310,7 +245,7 @@ real Windows against real installations of Claude (Microsoft Store), Slack and V
 
 ### Added
 
-- **`Twinstance.exe`** — one binary, four modes: URL routing, `--launch <instance>`,
+- **`Twinstall.exe`** — one binary, four modes: URL routing, `--launch <instance>`,
   `--watch [seconds]`, `--compose`, and a management UI when started with no arguments. The
   routing path dispatches on `argv` before touching a WinForms type, so a sign-in callback
   doesn't pay for the UI.
@@ -318,10 +253,10 @@ real Windows against real installations of Claude (Microsoft Store), Slack and V
   instances, choose badge colours, and see exactly what will change before it happens.
   Isolation is enforced as you type, not merely warned about.
 - **Protocol registration** via `RegisteredApplications` — a ProgId plus a `UrlAssociations`
-  capability, after which *you* pick Twinstance in Settings. It never writes the scheme key
+  capability, after which *you* pick Twinstall in Settings. It never writes the scheme key
   directly.
 - **Badged taskbar icons** — the target app's own logo is extracted from its executable at up
-  to 256px and composited with a coloured disc. No third-party artwork ships with Twinstance.
+  to 256px and composited with a coloured disc. No third-party artwork ships with Twinstall.
 - **Start-menu shortcuts** per instance, since without them there is no way to open the second
   account at all.
 - **Detection steps 0–5**, complete: launcher-stub resolution, Chromium confirmation, profile
@@ -351,7 +286,7 @@ Each of these was found by running the code against real applications, not by re
 - **Every preset pointed at the wrong executable**, including the one marked verified.
 - **`CA5392`** — no P/Invoke pinned its DLL search path, so a `user32.dll` placed beside the
   executable would have been preferred over the real one. All imports now pin System32.
-- The launch probe left an empty `%TEMP%\Twinstance` behind.
+- The launch probe left an empty `%TEMP%\Twinstall` behind.
 
 ### Known limits
 
@@ -369,8 +304,8 @@ Each of these was found by running the code against real applications, not by re
 
 ### Added
 
-- `Twinstance.Core` — decision logic with no OS dependency, targeting `net8.0` so a Windows call
+- `Twinstall.Core` — decision logic with no OS dependency, targeting `net8.0` so a Windows call
   fails to compile. Path rules, package-name derivation, command-line parsing, Chromium
   detection, isolation checks, config parsing, route selection.
-- `Twinstance.Platform` — thin Win32/WMI/GDI+ adapters holding no decisions.
-- `Twinstance.Tests` — a console runner whose exit code is the result. No framework, no restore.
+- `Twinstall.Platform` — thin Win32/WMI/GDI+ adapters holding no decisions.
+- `Twinstall.Tests` — a console runner whose exit code is the result. No framework, no restore.
